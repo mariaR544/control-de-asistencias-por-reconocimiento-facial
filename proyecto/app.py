@@ -10,7 +10,7 @@ import time
 
 app = Flask(__name__)
 
-# 📌 DEFINICIÓN DE LA RUTA ABSOLUTA DE LA BASE DE DATOS 
+# DEFINICIÓN DE LA RUTA ABSOLUTA DE LA BASE DE DATOS 
 # Esto evita que Flask cree archivos .db vacíos según la carpeta desde donde abras la terminal.
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 DB_PATH = os.path.join(BASE_DIR, "asistencia_colegio.db")
