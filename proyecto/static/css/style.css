@@ -1,0 +1,256 @@
+/* Variables de color corporativas del Colegio Guayamurí */
+:root {
+    --verde-colegio: #1E5631;
+    --verde-hover: #277448;
+    --verde-claro: #E8F5E9;
+    --verde-texto: #1B5E20;
+    --blanco-fondo: #F5F7F6;
+    --gris-borde: #E0E0E0;
+    --gris-texto: #333333;
+}
+
+/* Configuración General */
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: var(--blanco-fondo);
+    color: var(--gris-texto);
+    display: flex;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* BARRA LATERAL */
+.sidebar {
+    width: 260px;
+    background-color: var(--verde-colegio);
+    color: white;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 30px 20px;
+    box-shadow: 3px 0 10px rgba(0, 0, 0, 0.1);
+}
+
+.logo-section {
+    text-align: center;
+    margin-bottom: 40px;
+}
+
+.logo-section h1 {
+    font-size: 24px;
+    font-weight: bold;
+    letter-spacing: 1px;
+}
+
+.logo-section p {
+    font-size: 11px;
+    color: #A3E635; /* Verde lima suave */
+    margin-top: 4px;
+}
+
+.nav-links {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.nav-btn {
+    width: 100%;
+    text-align: left;
+    padding: 12px 16px;
+    background: transparent;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    font-size: 14px;
+    cursor: pointer;
+    transition: background 0.3s;
+    text-decoration: none;
+}
+
+.nav-btn.active, .nav-btn:hover {
+    background-color: var(--verde-hover);
+}
+
+.btn-excel {
+    display: block;
+    text-align: center;
+    width: 100%;
+    background-color: white;
+    color: var(--verde-colegio);
+    font-weight: bold;
+    padding: 14px;
+    border-radius: 8px;
+    text-decoration: none;
+    box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+    transition: background 0.3s, transform 0.2s;
+}
+
+.btn-excel:hover {
+    background-color: #EAEAEA;
+    transform: translateY(-2px);
+}
+
+/* CONTENIDO PRINCIPAL */
+.main-content {
+    flex: 1;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+header {
+    background-color: white;
+    padding: 20px 30px;
+    display: flex;
+    justify-content: space-between;
+    items-align: center;
+    border-b: 1px solid var(--gris-borde);
+    box-shadow: 0 2px 4px rgba(0,0,0,0.02);
+}
+
+header h2 {
+    font-size: 22px;
+    color: #222;
+}
+
+.badge-live {
+    background-color: var(--verde-claro);
+    color: var(--verde-texto);
+    font-size: 12px;
+    font-weight: bold;
+    padding: 6px 14px;
+    border-radius: 20px;
+    border: 1px solid #C8E6C9;
+}
+
+/* TABLA DE ASISTENCIA */
+.table-container {
+    flex: 1;
+    padding: 30px;
+    overflow-y: auto;
+}
+
+.table-wrapper {
+    background-color: white;
+    border-radius: 12px;
+    border: 1px solid var(--gris-borde);
+    box-shadow: 0 4px 12px rgba(0,0,0,0.02);
+    overflow: hidden;
+}
+
+table {
+    width: 100%;
+    border-collapse: collapse;
+    text-align: left;
+}
+
+th {
+    background-color: var(--verde-colegio);
+    color: white;
+    padding: 16px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+td {
+    padding: 16px;
+    border-bottom: 1px solid var(--gris-borde);
+    font-size: 14px;
+}
+
+tr:last-child td {
+    border-bottom: none;
+}
+
+tr:hover {
+    background-color: #FAFAFA;
+}
+
+.badge-dept {
+    background-color: #F0F0F0;
+    color: #555;
+    padding: 4px 8px;
+    border-radius: 4px;
+    font-size: 12px;
+}
+
+.font-mono {
+    font-family: monospace;
+    font-size: 14px;
+}
+
+/* ==========================================================================
+   ESTILOS PARA FORMULARIOS Y REGISTRO
+   ========================================================================== */
+
+.form-box {
+    background-color: white;
+    padding: 40px;
+    border-radius: 12px;
+    border: 1px solid var(--gris-borde);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
+    width: 100%;
+    max-width: 500px;
+    margin: 40px auto;
+}
+
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-group label {
+    display: block;
+    margin-bottom: 8px;
+    font-weight: 600;
+    color: var(--verde-colegio);
+    font-size: 14px;
+}
+
+.form-group input, 
+.form-group select {
+    width: 100%;
+    padding: 12px;
+    border: 1px solid var(--gris-borde);
+    border-radius: 6px;
+    font-size: 14px;
+    color: var(--gris-texto);
+    background-color: #FAFAFA;
+    transition: border-color 0.3s, background-color 0.3s;
+}
+
+.form-group input:focus, 
+.form-group select:focus {
+    outline: none;
+    border-color: var(--verde-hover);
+    background-color: white;
+}
+
+.btn-submit {
+    width: 100%;
+    background-color: var(--verde-colegio);
+    color: white;
+    border: none;
+    padding: 14px;
+    border-radius: 6px;
+    font-weight: bold;
+    cursor: pointer;
+    font-size: 16px;
+    box-shadow: 0 4px 6px rgba(30, 86, 49, 0.1);
+    transition: background-color 0.3s, transform 0.1s;
+}
+
+.btn-submit:hover {
+    background-color: var(--verde-hover);
+}
+
+.btn-submit:active {
+    transform: scale(0.98);
+}
