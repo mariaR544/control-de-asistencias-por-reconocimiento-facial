@@ -1,0 +1,155 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Reportes de Asistencia - Colegio Guayamuri</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="logo">
+                Colegio <span>Guayamuri</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="reports.html" class="active">Reportes y Excel</a></li>
+                    <li><a href="simulador.html">Simulador de Cámara</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <h1 class="page-title">Reportes y Exportación</h1>
+        <p class="page-subtitle">Filtra el historial de asistencia por rango de fechas y descarga el reporte en formato Excel idéntico al solicitado.</p>
+        <!-- Filtros -->
+        <div class="card mb-4">
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label for="start-date">Fecha de Inicio</label>
+                    <input type="date" id="start-date" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label for="end-date">Fecha de Fin</label>
+                    <input type="date" id="end-date" class="form-control">
+                </div>
+                <div style="display: flex; gap: 0.5rem;">
+                    <button class="btn btn-secondary" id="filter-btn">
+                        🔍 Filtrar Tabla
+                    </button>
+                    <button class="btn" id="export-btn">
+                        📊 Exportar a Excel
+                    </button>
+                </div>
+            </div>
+        </div>
+        <!-- Tabla de Datos Históricos -->
+        <div class="card">
+            <h2>Registros Encontrados</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="logs-count">
+                Mostrando registros.
+            </p>
+            
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Person ID</th>
+                            <th>Name</th>
+                            <th>Department</th>
+                            <th>Time</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reports-tbody">
+                        <tr>
+                            <td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">
+                                Haz clic en Filtrar para cargar los registros.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <script>
+        const BACKEND_URL = "http://localhost:8000";
+        const startDateInput = document.getElementById("start-date");
+        const endDateInput = document.getElementById("end-date");
+        const filterBtn = document.getElementById("filter-btn");
+        const exportBtn = document.getElementById("export-btn");
+        const reportsTbody = document.getElementById("reports-tbody");
+        const logsCountText = document.getElementById("logs-count");
+        // Configurar fechas por defecto (hoy por defecto)
+        function setDefaultDates() {
+            const today = new Date().toISOString().split('T')[0];
+            startDateInput.value = today;
+            endDateInput.value = today;
+        }
+        // Cargar registros filtrados
+        async function fetchLogs() {
+            const start = startDateInput.value;
+            const end = endDateInput.value;
+            
+            reportsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">Cargando registros...</td></tr>`;
+            try {
+                // Obtenemos todos los registros del endpoint
+                const response = await fetch(`${BACKEND_URL}/api/attendance`);
+                let logs = await response.json();
+                // Filtrar localmente en el frontend para el despliegue del simulador
+                if (start) {
+                    const startDt = new Date(start + "T00:00:00");
+                    logs = logs.filter(log => new Date(log.timestamp) >= startDt);
+                }
+                if (end) {
+                    const endDt = new Date(end + "T23:59:59");
+                    logs = logs.filter(log => new Date(log.timestamp) <= endDt);
+                }
+                // Renderizar tabla
+                reportsTbody.innerHTML = "";
+                logsCountText.innerText = `Se encontraron ${logs.length} registros en el rango seleccionado.`;
+                if (logs.length === 0) {
+                    reportsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">No se encontraron asistencias en estas fechas.</td></tr>`;
+                    return;
+                }
+                // El reporte original va en orden ascendente (más antiguo primero) para leer como bitácora cronológica
+                logs.reverse().forEach(log => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td class="person-id-cell">'${log.person_id}</td>
+                        <td>${log.name.toUpperCase()}</td>
+                        <td>${log.department.toUpperCase()}</td>
+                        <td>${log.time_formatted}</td>
+                    `;
+                    reportsTbody.appendChild(tr);
+                });
+            } catch (error) {
+                console.error("Error al filtrar asistencias:", error);
+                reportsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: #ef4444; padding: 2rem;">Error al conectar con el servidor. Asegúrate de que el backend de Python esté corriendo.</td></tr>`;
+            }
+        }
+        // Descargar reporte Excel
+        exportBtn.addEventListener("click", () => {
+            const start = startDateInput.value;
+            const end = endDateInput.value;
+            
+            let url = `${BACKEND_URL}/api/attendance/export`;
+            const params = [];
+            
+            if (start) params.push(`start_date=${start}`);
+            if (end) params.push(`end_date=${end}`);
+            
+            if (params.length > 0) {
+                url += "?" + params.join("&");
+            }
+            // Redireccionar para descargar
+            window.location.href = url;
+        });
+        filterBtn.addEventListener("click", fetchLogs);
+        // Inicializar
+        setDefaultDates();
+        fetchLogs();
+    </script>
+</body>
+</html>

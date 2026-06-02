@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Simulador de Cámara Hikvision - Colegio Guayamuri</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="logo">
+                Colegio <span>Guayamuri</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="simulador.html" class="active">Simulador de Cámara</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <h1 class="page-title">Panel Simulador de Detecciones</h1>
+        <p class="page-subtitle">Emula el envío de marcaciones de la cámara de reconocimiento facial Hikvision hacia el software.</p>
+        <div class="simulator-layout">
+            
+            <!-- Bloque Izquierdo: Lista de Empleados Disponibles para Simular -->
+            <div class="card">
+                <h2>1. Seleccionar Empleado</h2>
+                <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+                    Haz clic sobre cualquier empleado para enviar una "detección de rostro" simulada al backend.
+                </p>
+                
+                <div id="employees-grid" class="employee-card-grid">
+                    <!-- Tarjetas de empleados se cargarán aquí -->
+                    <p class="text-center py-4" style="color: var(--text-muted); width: 100%;">Cargando lista de empleados...</p>
+                </div>
+            </div>
+            <!-- Bloque Derecho: Agregar Empleado y Log de Simulación -->
+            <div class="card" style="display: flex; flex-direction: column; gap: 2rem;">
+                
+                <!-- Registrar Nuevo Empleado para Pruebas -->
+                <div>
+                    <h2>Registrar Empleado de Prueba</h2>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1rem;">
+                        Agrega un nuevo empleado para expandir tus pruebas.
+                    </p>
+                    
+                    <form id="register-form" style="display: flex; flex-direction: column; gap: 1rem;">
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>ID del Empleado (Person ID)</label>
+                            <input type="text" id="new-id" class="form-control" placeholder="Ej: 5473790" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Nombre Completo</label>
+                            <input type="text" id="new-name" class="form-control" placeholder="Ej: JULIA LUNA" required>
+                        </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Departamento</label>
+                            <input type="text" id="new-dept" class="form-control" placeholder="Ej: GUAYAMURI/DOCENTE" required>
+                        </div>
+                        <button type="submit" class="btn">Registrar Empleado</button>
+                    </form>
+                </div>
+                <hr style="border-color: var(--border);">
+                <!-- Log de Simulaciones Realizadas -->
+                <div>
+                    <h2>Registro de Acciones</h2>
+                    <div style="background: rgba(0,0,0,0.3); border-radius: 8px; padding: 1rem; max-height: 200px; overflow-y: auto; font-family: monospace; font-size: 0.85rem; border: 1px solid var(--border);" id="sim-log">
+                        <div style="color: var(--text-muted);">[Simulador listo. Esperando acciones...]</div>
+                    </div>
+                    <button class="btn btn-secondary btn-danger mt-4" id="clear-attendance-btn" style="width: 100%;">
+                        Vaciar Historial de Asistencia
+                    </button>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const BACKEND_URL = "http://localhost:8000";
+        const employeesGrid = document.getElementById("employees-grid");
+        const registerForm = document.getElementById("register-form");
+        const simLog = document.getElementById("sim-log");
+        const clearAttendanceBtn = document.getElementById("clear-attendance-btn");
+        // Agregar una línea al log local
+        function logAction(message, type = 'info') {
+            const time = new Date().toLocaleTimeString();
+            let color = 'var(--text-main)';
+            if (type === 'success') color = 'var(--accent)';
+            if (type === 'error') color = '#ef4444';
+            
+            const line = document.createElement("div");
+            line.style.color = color;
+            line.innerHTML = `[${time}] ${message}`;
+            simLog.appendChild(line);
+            simLog.scrollTop = simLog.scrollHeight;
+        }
+        // Cargar y mostrar empleados desde el servidor
+        async function loadEmployees() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/employees`);
+                const employees = await response.json();
+                
+                employeesGrid.innerHTML = "";
+                if (employees.length === 0) {
+                    employeesGrid.innerHTML = `<p class="text-center py-4" style="color: var(--text-muted); width: 100%;">No hay empleados registrados.</p>`;
+                    return;
+                }
+                employees.forEach(emp => {
+                    const card = document.createElement("div");
+                    card.className = "employee-sim-card";
+                    card.innerHTML = `
+                        <h4>${emp.name.toUpperCase()}</h4>
+                        <p>${emp.department.toUpperCase()}</p>
+                        <span class="sim-id">'${emp.id}</span>
+                    `;
+                    card.addEventListener("click", () => triggerDetection(emp.id, emp.name));
+                    employeesGrid.appendChild(card);
+                });
+            } catch (error) {
+                console.error("Error al cargar empleados:", error);
+                logAction("Error al conectar con el servidor para cargar empleados.", "error");
+            }
+        }
+        // Simular evento de detección facial Hikvision
+        async function triggerDetection(personId, name) {
+            logAction(`Enviando simulación para: <strong>${name}</strong>...`);
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/hikvision/event`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        person_id: personId,
+                        device_info: "Cámara Sim-PC"
+                    })
+                });
+                if (response.ok) {
+                    const result = await response.json();
+                    logAction(`¡Marcación registrada con éxito para ${name}!`, "success");
+                } else {
+                    const err = await response.json();
+                    logAction(`Fallo en el servidor: ${err.detail || 'Error desconocido'}`, "error");
+                }
+            } catch (error) {
+                console.error("Error al simular detección:", error);
+                logAction("Error de red al intentar enviar detección.", "error");
+            }
+        }
+        // Registrar nuevo empleado
+        registerForm.addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const personId = document.getElementById("new-id").value.trim();
+            const name = document.getElementById("new-name").value.trim().toUpperCase();
+            const dept = document.getElementById("new-dept").value.trim().toUpperCase();
+            logAction(`Registrando nuevo empleado en la base de datos: ${name}...`);
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/employees?id=${encodeURIComponent(personId)}&name=${encodeURIComponent(name)}&department=${encodeURIComponent(dept)}`, {
+                    method: "POST"
+                });
+                if (response.ok) {
+                    logAction(`Empleado ${name} registrado con éxito.`, "success");
+                    registerForm.reset();
+                    loadEmployees(); // Recargar grid
+                } else {
+                    const err = await response.json();
+                    logAction(`Error al registrar: ${err.detail || 'ID ya existe'}`, "error");
+                }
+            } catch (error) {
+                console.error("Error de registro:", error);
+                logAction("Error de red al registrar empleado.", "error");
+            }
+        });
+        // Vaciar historial de asistencias
+        clearAttendanceBtn.addEventListener("click", async () => {
+            if (!confirm("¿Estás seguro de que deseas vaciar todas las asistencias registradas hoy? Esto no borrará a los empleados.")) {
+                return;
+            }
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/attendance/clear`, {
+                    method: "DELETE"
+                });
+                if (response.ok) {
+                    logAction("Historial de asistencia vaciado correctamente en el servidor.", "success");
+                } else {
+                    logAction("Error al vaciar historial de asistencia.", "error");
+                }
+            } catch (error) {
+                logAction("Error de red al vaciar historial.", "error");
+            }
+        });
+        // Inicializar
+        loadEmployees();
+    </script>
+</body>
+</html>

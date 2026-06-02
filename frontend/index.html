@@ -1,0 +1,218 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monitoreo en Tiempo Real - Colegio Guayamuri</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="logo">
+                Colegio <span>Guayamuri</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html" class="active">Monitoreo En Vivo</a></li>
+                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="simulador.html">Simulador de Cámara</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <div class="status-bar">
+            <div id="connection-dot" class="status-dot"></div>
+            <span id="connection-text">Conectando al servidor de asistencia...</span>
+        </div>
+        <h1 class="page-title">Monitoreo de Asistencia</h1>
+        <p class="page-subtitle">Visualización en tiempo real para las computadoras de control.</p>
+        <div class="dashboard-grid">
+            <!-- Columna Izquierda: Último Registro Detectado -->
+            <div class="card live-alert-card" id="last-record-card">
+                <h2 class="mb-4">Última Detección</h2>
+                <div id="no-record-message" class="text-center py-4" style="color: var(--text-muted);">
+                    <p>Esperando marcaciones de cámara...</p>
+                </div>
+                <div id="last-record-content" style="display: none;">
+                    <div class="alert-info-container">
+                        <div class="avatar-placeholder">
+                            👤
+                        </div>
+                        <div class="alert-details">
+                            <h3 id="last-emp-name">JULIA LUNA</h3>
+                            <p><strong>ID:</strong> <span id="last-emp-id" class="person-id-cell">5473790</span></p>
+                            <p><strong>Dpto:</strong> <span id="last-emp-dept">GUAYAMURI/MANTENIMIENTO</span></p>
+                            <p><strong>Hora:</strong> <span id="last-emp-time">26/05/2026 14:00</span></p>
+                            <span class="badge" id="last-emp-device">Cámara Entrada</span>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <!-- Columna Derecha: Tabla de Registros Recientes -->
+            <div class="card">
+                <h2 class="mb-4">Registros del Día</h2>
+                <div class="table-container">
+                    <table>
+                        <thead>
+                            <tr>
+                                <th>Person ID</th>
+                                <th>Name</th>
+                                <th>Department</th>
+                                <th>Time</th>
+                            </tr>
+                        </thead>
+                        <tbody id="attendance-tbody">
+                            <!-- Filas cargadas dinámicamente -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </main>
+    <!-- Contenedor para notificaciones flotantes (toasts) -->
+    <div id="toast-container" class="toast-container"></div>
+    <script>
+        const BACKEND_URL = "http://localhost:8000";
+        const WS_URL = "ws://localhost:8000/ws/attendance";
+        const connectionDot = document.getElementById("connection-dot");
+        const connectionText = document.getElementById("connection-text");
+        const attendanceTbody = document.getElementById("attendance-tbody");
+        const lastRecordCard = document.getElementById("last-record-card");
+        const lastRecordContent = document.getElementById("last-record-content");
+        const noRecordMessage = document.getElementById("no-record-message");
+        // Elementos de la última detección
+        const lastEmpName = document.getElementById("last-emp-name");
+        const lastEmpId = document.getElementById("last-emp-id");
+        const lastEmpDept = document.getElementById("last-emp-dept");
+        const lastEmpTime = document.getElementById("last-emp-time");
+        const lastEmpDevice = document.getElementById("last-emp-device");
+        let socket = null;
+        // Función para reproducir un pitido corto y agradable de confirmación
+        function playBeep() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                
+                // Oscilador para el tono
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Tono A5 (880Hz)
+                
+                // Efecto de atenuación rápida (fade out)
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.15);
+            } catch (e) {
+                console.log("No se pudo iniciar el audio:", e);
+            }
+        }
+        // Crear una notificación tipo Toast en la esquina inferior derecha
+        function showToast(name, dept) {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            toast.className = "toast";
+            toast.innerHTML = `
+                <div>🔔</div>
+                <div>
+                    <h4 style="color:#fff; font-size:0.9rem;">Asistencia Registrada</h4>
+                    <p style="color:var(--text-muted); font-size:0.8rem;">${name} (${dept})</p>
+                </div>
+            `;
+            container.appendChild(toast);
+            // Eliminar después de 4 segundos
+            setTimeout(() => {
+                toast.classList.add("fade-out");
+                setTimeout(() => toast.remove(), 300);
+            }, 4000);
+        }
+        // Cargar registros existentes al inicio
+        async function fetchRecentAttendance() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/attendance`);
+                const data = await response.json();
+                
+                attendanceTbody.innerHTML = "";
+                if (data.length > 0) {
+                    data.forEach(log => addAttendanceToTable(log, false));
+                    // Mostrar el más reciente en el panel izquierdo
+                    updateLastRecordPanel(data[0]);
+                } else {
+                    attendanceTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">No hay asistencias registradas hoy.</td></tr>`;
+                }
+            } catch (error) {
+                console.error("Error al cargar asistencias iniciales:", error);
+            }
+        }
+        // Actualizar el panel de la izquierda
+        function updateLastRecordPanel(log) {
+            noRecordMessage.style.display = "none";
+            lastRecordContent.style.display = "block";
+            lastEmpName.innerText = log.name.toUpperCase();
+            lastEmpId.innerText = `'${log.person_id}`;
+            lastEmpDept.innerText = log.department.toUpperCase();
+            lastEmpTime.innerText = log.time_formatted;
+            lastEmpDevice.innerText = log.device_info;
+        }
+        // Agregar fila a la tabla
+        function addAttendanceToTable(log, animate = true) {
+            // Quitar el mensaje de vacío si existe
+            if (attendanceTbody.innerHTML.includes("No hay asistencias")) {
+                attendanceTbody.innerHTML = "";
+            }
+            const tr = document.createElement("tr");
+            if (animate) {
+                tr.className = "new-row";
+            }
+            tr.innerHTML = `
+                <td class="person-id-cell">'${log.person_id}</td>
+                <td>${log.name.toUpperCase()}</td>
+                <td>${log.department.toUpperCase()}</td>
+                <td>${log.time_formatted}</td>
+            `;
+            // Agregar al inicio de la tabla (más reciente arriba)
+            if (attendanceTbody.firstChild) {
+                attendanceTbody.insertBefore(tr, attendanceTbody.firstChild);
+            } else {
+                attendanceTbody.appendChild(tr);
+            }
+        }
+        // Inicializar conexión WebSocket
+        function connectWebSocket() {
+            socket = new WebSocket(WS_URL);
+            socket.onopen = function() {
+                console.log("WebSocket conectado al backend.");
+                connectionDot.className = "status-dot connected";
+                connectionText.innerText = "Conectado al servidor de asistencia. Monitoreando en vivo...";
+                fetchRecentAttendance();
+            };
+            socket.onmessage = function(event) {
+                const log = JSON.parse(event.data);
+                console.log("Nueva asistencia recibida por WS:", log);
+                
+                // Actualizar UI
+                addAttendanceToTable(log, true);
+                updateLastRecordPanel(log);
+                showToast(log.name, log.department);
+                playBeep();
+            };
+            socket.onclose = function() {
+                console.log("WebSocket desconectado. Intentando reconectar en 3 segundos...");
+                connectionDot.className = "status-dot";
+                connectionText.innerText = "Conexión perdida. Reconectando...";
+                setTimeout(connectWebSocket, 3000);
+            };
+            socket.onerror = function(err) {
+                console.error("Error en WebSocket:", err);
+                socket.close();
+            };
+        }
+        // Inicialización
+        connectWebSocket();
+    </script>
+</body>
+</html>
