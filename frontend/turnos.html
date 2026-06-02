@@ -1,0 +1,181 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Turnos - Colegio Guayamuri</title>
+    <link rel="stylesheet" href="css/style.css">
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="logo">Colegio <span>Guayamuri</span></div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="empleados.html">Empleados</a></li>
+                    <li><a href="turnos.html" class="active">Turnos</a></li>
+                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="simulador.html">Simulador de Cámara</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <h1 class="page-title">Configuración de Turnos</h1>
+        <p class="page-subtitle">Define los turnos con sus horas estándar. Todo lo trabajado por encima de esas horas se cuenta como horas extra. Asigna los turnos a cada empleado desde la página <a href="empleados.html" style="color:var(--primary);">Empleados</a>.</p>
+
+        <div class="card mb-4">
+            <h2 class="mb-4" id="shift-form-title">Crear nuevo turno</h2>
+            <form id="shift-form" class="filter-bar">
+                <div class="form-group">
+                    <label>Nombre del turno</label>
+                    <input type="text" id="shift-name" class="form-control" placeholder="Ej: Turno Mañana" required>
+                </div>
+                <div class="form-group">
+                    <label>Hora entrada (ref.)</label>
+                    <input type="time" id="shift-start" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Hora salida (ref.)</label>
+                    <input type="time" id="shift-end" class="form-control">
+                </div>
+                <div class="form-group">
+                    <label>Horas estándar</label>
+                    <input type="number" id="shift-hours" class="form-control" min="0.5" max="24" step="0.5" value="8" required>
+                </div>
+                <div style="display:flex; gap:0.5rem;">
+                    <button type="submit" class="btn" id="shift-submit-btn">Guardar turno</button>
+                    <button type="button" class="btn btn-secondary" id="shift-cancel-btn" style="display:none;">Cancelar</button>
+                </div>
+            </form>
+        </div>
+        <div class="card">
+            <h2 class="mb-4">Turnos configurados</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Nombre</th>
+                            <th>Entrada</th>
+                            <th>Salida</th>
+                            <th>Horas estándar</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="shifts-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        const BACKEND_URL = "http://localhost:8000";
+        let shifts = [];
+        let editingShiftId = null;
+
+        function showToast(msg, ok = true) {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            toast.className = "toast";
+            toast.style.borderLeftColor = ok ? "var(--accent)" : "#ef4444";
+            toast.innerHTML = `<div>${ok ? '✅' : '⚠️'}</div><div><p style="color:#fff; font-size:0.85rem;">${msg}</p></div>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.add("fade-out"); setTimeout(() => toast.remove(), 300); }, 3500);
+        }
+
+        async function loadShifts() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/shifts`);
+                shifts = await res.json();
+                const tbody = document.getElementById("shifts-tbody");
+                tbody.innerHTML = "";
+                if (shifts.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay turnos configurados.</td></tr>`;
+                    return;
+                }
+                shifts.forEach(s => {
+                    const tr = document.createElement("tr");
+                    tr.innerHTML = `
+                        <td><strong>${s.name}</strong></td>
+                        <td>${s.start_time || '—'}</td>
+                        <td>${s.end_time || '—'}</td>
+                        <td>${s.standard_hours} h</td>
+                        <td class="shift-row-actions">
+                            <button class="btn btn-secondary btn-sm" data-edit="${s.id}">✏️ Editar</button>
+                            <button class="btn btn-danger btn-sm" data-del="${s.id}">🗑️</button>
+                        </td>`;
+                    tbody.appendChild(tr);
+                });
+                tbody.querySelectorAll("[data-edit]").forEach(b =>
+                    b.addEventListener("click", () => startEditShift(parseInt(b.dataset.edit))));
+                tbody.querySelectorAll("[data-del]").forEach(b =>
+                    b.addEventListener("click", () => deleteShift(parseInt(b.dataset.del))));
+            } catch (e) {
+                showToast("Error al conectar con el servidor.", false);
+            }
+        }
+
+        function startEditShift(id) {
+            const s = shifts.find(x => x.id === id);
+            if (!s) return;
+            editingShiftId = id;
+            document.getElementById("shift-name").value = s.name;
+            document.getElementById("shift-start").value = s.start_time || "";
+            document.getElementById("shift-end").value = s.end_time || "";
+            document.getElementById("shift-hours").value = s.standard_hours;
+            document.getElementById("shift-form-title").innerText = `Editando: ${s.name}`;
+            document.getElementById("shift-submit-btn").innerText = "Actualizar turno";
+            document.getElementById("shift-cancel-btn").style.display = "inline-flex";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function resetShiftForm() {
+            editingShiftId = null;
+            document.getElementById("shift-form").reset();
+            document.getElementById("shift-hours").value = 8;
+            document.getElementById("shift-form-title").innerText = "Crear nuevo turno";
+            document.getElementById("shift-submit-btn").innerText = "Guardar turno";
+            document.getElementById("shift-cancel-btn").style.display = "none";
+        }
+
+        document.getElementById("shift-cancel-btn").addEventListener("click", resetShiftForm);
+
+        document.getElementById("shift-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const body = {
+                name: document.getElementById("shift-name").value.trim(),
+                start_time: document.getElementById("shift-start").value || null,
+                end_time: document.getElementById("shift-end").value || null,
+                standard_hours: parseFloat(document.getElementById("shift-hours").value),
+            };
+            const url = editingShiftId ? `${BACKEND_URL}/api/shifts/${editingShiftId}` : `${BACKEND_URL}/api/shifts`;
+            const method = editingShiftId ? "PUT" : "POST";
+            try {
+                const res = await fetch(url, { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                if (res.ok) {
+                    showToast(editingShiftId ? "Turno actualizado." : "Turno creado.");
+                    resetShiftForm();
+                    loadShifts();
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || "Error al guardar turno.", false);
+                }
+            } catch (e) { showToast("Error de red.", false); }
+        });
+
+        async function deleteShift(id) {
+            const s = shifts.find(x => x.id === id);
+            if (!confirm(`¿Eliminar el turno "${s ? s.name : id}"? Los empleados quedarán sin turno asignado.`)) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/shifts/${id}`, { method: "DELETE" });
+                if (res.ok) { showToast("Turno eliminado."); loadShifts(); }
+                else showToast("No se pudo eliminar el turno.", false);
+            } catch (e) { showToast("Error de red.", false); }
+        }
+
+        loadShifts();
+    </script>
+</body>
+</html>

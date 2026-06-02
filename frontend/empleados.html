@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Empleados - Colegio Guayamuri</title>
+    <link rel="stylesheet" href="css/style.css">
+    <style>
+        .emp-photo {
+            width: 44px; height: 44px; border-radius: 50%;
+            object-fit: cover; border: 2px solid var(--border); background: rgba(0,0,0,0.2);
+        }
+        .emp-photo-placeholder {
+            width: 44px; height: 44px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            background: rgba(76,175,80,0.1); border: 2px dashed var(--primary);
+            color: var(--primary); font-size: 1.2rem;
+        }
+        .photo-preview {
+            width: 90px; height: 90px; border-radius: 12px; object-fit: cover;
+            border: 1px solid var(--border); margin-top: 0.5rem;
+        }
+        .row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="logo">Colegio <span>Guayamuri</span></div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="empleados.html" class="active">Empleados</a></li>
+                    <li><a href="turnos.html">Turnos</a></li>
+                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="simulador.html">Simulador de Cámara</a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <h1 class="page-title">Gestión de Empleados</h1>
+        <p class="page-subtitle">Agrega, edita y elimina empleados. Sube la foto del rostro y sincronízala con la cámara facial (cuando esté conectada) para el enrolamiento.</p>
+
+        <!-- Formulario crear/editar -->
+        <div class="card mb-4">
+            <h2 class="mb-4" id="form-title">Agregar empleado</h2>
+            <form id="emp-form">
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label>Person ID (cédula/legajo)</label>
+                        <input type="text" id="emp-id" class="form-control" placeholder="Ej: 5473790" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Nombre completo</label>
+                        <input type="text" id="emp-name" class="form-control" placeholder="Ej: JULIA LUNA" required>
+                    </div>
+                    <div class="form-group">
+                        <label>Departamento</label>
+                        <input type="text" id="emp-dept" class="form-control" placeholder="Ej: GUAYAMURI/DOCENTE" required>
+                    </div>
+                </div>
+                <div class="filter-bar">
+                    <div class="form-group">
+                        <label>Turno</label>
+                        <select id="emp-shift" class="form-control"><option value="">— Sin turno —</option></select>
+                    </div>
+                    <div class="form-group">
+                        <label>N° de tarjeta (opcional)</label>
+                        <input type="text" id="emp-card" class="form-control" placeholder="Ej: 0001">
+                    </div>
+                    <div class="form-group">
+                        <label>Foto del rostro (JPG/PNG)</label>
+                        <input type="file" id="emp-photo" class="form-control" accept="image/jpeg,image/png">
+                        <img id="photo-preview" class="photo-preview" style="display:none;" alt="Vista previa">
+                    </div>
+                </div>
+                <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
+                    <button type="submit" class="btn" id="submit-btn">Guardar empleado</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-btn" style="display:none;">Cancelar</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- Listado -->
+        <div class="card">
+            <h2 class="mb-4">Empleados registrados</h2>
+            <div class="table-container">
+                <table>
+                    <thead>
+                        <tr>
+                            <th>Foto</th>
+                            <th>Person ID</th>
+                            <th>Nombre</th>
+                            <th>Departamento</th>
+                            <th>Turno</th>
+                            <th>Tarjeta</th>
+                            <th>Cámara</th>
+                            <th>Acciones</th>
+                        </tr>
+                    </thead>
+                    <tbody id="emp-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+    </main>
+    <div id="toast-container" class="toast-container"></div>
+
+    <script>
+        const BACKEND_URL = "http://localhost:8000";
+        let shifts = [];
+        let employees = [];
+        let editingId = null;
+
+        function showToast(msg, ok = true) {
+            const container = document.getElementById("toast-container");
+            const toast = document.createElement("div");
+            toast.className = "toast";
+            toast.style.borderLeftColor = ok ? "var(--accent)" : "#ef4444";
+            toast.innerHTML = `<div>${ok ? '✅' : '⚠️'}</div><div><p style="color:#fff; font-size:0.85rem;">${msg}</p></div>`;
+            container.appendChild(toast);
+            setTimeout(() => { toast.classList.add("fade-out"); setTimeout(() => toast.remove(), 300); }, 4000);
+        }
+
+        function cameraBadge(status) {
+            if (status === "sincronizado") return `<span class="badge-in">Sincronizado</span>`;
+            if (status === "error") return `<span class="badge-out">Error</span>`;
+            return `<span class="badge-incomplete">Pendiente</span>`;
+        }
+
+        async function loadShifts() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/shifts`);
+                shifts = await res.json();
+                const sel = document.getElementById("emp-shift");
+                sel.innerHTML = `<option value="">— Sin turno —</option>` +
+                    shifts.map(s => `<option value="${s.id}">${s.name} (${s.standard_hours}h)</option>`).join("");
+            } catch (e) { console.error(e); }
+        }
+
+        async function loadEmployees() {
+            const tbody = document.getElementById("emp-tbody");
+            tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/employees`);
+                employees = await res.json();
+                tbody.innerHTML = "";
+                if (employees.length === 0) {
+                    tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay empleados registrados.</td></tr>`;
+                    return;
+                }
+                employees.forEach(emp => {
+                    const tr = document.createElement("tr");
+                    const photoCell = emp.has_photo
+                        ? `<img class="emp-photo" src="${BACKEND_URL}/api/employees/${emp.id}/photo?t=${Date.now()}" alt="">`
+                        : `<div class="emp-photo-placeholder">👤</div>`;
+                    const shiftName = emp.shift ? `${emp.shift.name}` : "—";
+                    tr.innerHTML = `
+                        <td>${photoCell}</td>
+                        <td class="person-id-cell">'${emp.id}</td>
+                        <td>${emp.name.toUpperCase()}</td>
+                        <td>${emp.department.toUpperCase()}</td>
+                        <td>${shiftName}</td>
+                        <td>${emp.card_number || "—"}</td>
+                        <td>${cameraBadge(emp.camera_status)}</td>
+                        <td class="row-actions">
+                            <button class="btn btn-secondary btn-sm" data-edit="${emp.id}">✏️ Editar</button>
+                            <button class="btn btn-sm" data-sync="${emp.id}" ${emp.has_photo ? "" : "disabled title='Sube una foto primero'"}>📷 Cámara</button>
+                            <button class="btn btn-danger btn-sm" data-del="${emp.id}">🗑️</button>
+                        </td>`;
+                    tbody.appendChild(tr);
+                });
+                tbody.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => startEdit(b.dataset.edit)));
+                tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => deleteEmployee(b.dataset.del)));
+                tbody.querySelectorAll("[data-sync]").forEach(b => b.addEventListener("click", () => syncCamera(b.dataset.sync)));
+            } catch (e) {
+                tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
+            }
+        }
+
+        // Vista previa de la foto seleccionada
+        document.getElementById("emp-photo").addEventListener("change", (e) => {
+            const file = e.target.files[0];
+            const preview = document.getElementById("photo-preview");
+            if (file) {
+                preview.src = URL.createObjectURL(file);
+                preview.style.display = "block";
+            } else {
+                preview.style.display = "none";
+            }
+        });
+
+        function startEdit(id) {
+            const emp = employees.find(e => e.id === id);
+            if (!emp) return;
+            editingId = id;
+            document.getElementById("emp-id").value = emp.id;
+            document.getElementById("emp-id").disabled = true;
+            document.getElementById("emp-name").value = emp.name;
+            document.getElementById("emp-dept").value = emp.department;
+            document.getElementById("emp-shift").value = emp.shift_id || "";
+            document.getElementById("emp-card").value = emp.card_number || "";
+            document.getElementById("emp-photo").value = "";
+            document.getElementById("photo-preview").style.display = "none";
+            document.getElementById("form-title").innerText = `Editando: ${emp.name}`;
+            document.getElementById("submit-btn").innerText = "Actualizar empleado";
+            document.getElementById("cancel-btn").style.display = "inline-flex";
+            window.scrollTo({ top: 0, behavior: "smooth" });
+        }
+
+        function resetForm() {
+            editingId = null;
+            document.getElementById("emp-form").reset();
+            document.getElementById("emp-id").disabled = false;
+            document.getElementById("photo-preview").style.display = "none";
+            document.getElementById("form-title").innerText = "Agregar empleado";
+            document.getElementById("submit-btn").innerText = "Guardar empleado";
+            document.getElementById("cancel-btn").style.display = "none";
+        }
+        document.getElementById("cancel-btn").addEventListener("click", resetForm);
+
+        async function uploadPhoto(empId) {
+            const fileInput = document.getElementById("emp-photo");
+            if (!fileInput.files.length) return true;
+            const fd = new FormData();
+            fd.append("file", fileInput.files[0]);
+            const res = await fetch(`${BACKEND_URL}/api/employees/${empId}/photo`, { method: "POST", body: fd });
+            if (!res.ok) {
+                const err = await res.json().catch(() => ({}));
+                showToast(err.detail || "Error al subir la foto.", false);
+                return false;
+            }
+            return true;
+        }
+
+        document.getElementById("emp-form").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const shiftVal = document.getElementById("emp-shift").value;
+            const body = {
+                name: document.getElementById("emp-name").value.trim(),
+                department: document.getElementById("emp-dept").value.trim(),
+                shift_id: shiftVal ? parseInt(shiftVal) : null,
+                card_number: document.getElementById("emp-card").value.trim() || null,
+            };
+            try {
+                let empId;
+                if (editingId) {
+                    const res = await fetch(`${BACKEND_URL}/api/employees/${editingId}`, {
+                        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al actualizar.", false); return; }
+                    empId = editingId;
+                } else {
+                    body.id = document.getElementById("emp-id").value.trim();
+                    const res = await fetch(`${BACKEND_URL}/api/employees`, {
+                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                    if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al crear empleado.", false); return; }
+                    empId = body.id;
+                }
+                const photoOk = await uploadPhoto(empId);
+                showToast(editingId ? "Empleado actualizado." : "Empleado agregado.");
+                resetForm();
+                loadEmployees();
+            } catch (e) {
+                showToast("Error de red.", false);
+            }
+        });
+
+        async function deleteEmployee(id) {
+            const emp = employees.find(e => e.id === id);
+            if (!confirm(`¿Eliminar al empleado ${emp ? emp.name : id}? Se borrarán también sus marcaciones y su foto.`)) return;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/employees/${id}`, { method: "DELETE" });
+                if (res.ok) { showToast("Empleado eliminado."); loadEmployees(); }
+                else showToast("No se pudo eliminar.", false);
+            } catch (e) { showToast("Error de red.", false); }
+        }
+
+        async function syncCamera(id) {
+            showToast("Enviando datos a la cámara...");
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/employees/${id}/camera-sync`, { method: "POST" });
+                const data = await res.json();
+                if (!res.ok) { showToast(data.detail || "Error al sincronizar.", false); return; }
+                showToast(data.message, data.ok);
+                loadEmployees();
+            } catch (e) { showToast("Error de red.", false); }
+        }
+
+        // Inicializar
+        (async () => { await loadShifts(); await loadEmployees(); })();
+    </script>
+</body>
+</html>

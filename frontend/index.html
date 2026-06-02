@@ -15,6 +15,8 @@
             <nav>
                 <ul>
                     <li><a href="index.html" class="active">Monitoreo En Vivo</a></li>
+                    <li><a href="empleados.html">Empleados</a></li>
+                    <li><a href="turnos.html">Turnos</a></li>
                     <li><a href="reports.html">Reportes y Excel</a></li>
                     <li><a href="simulador.html">Simulador de Cámara</a></li>
                 </ul>
@@ -50,23 +52,42 @@
                     </div>
                 </div>
             </div>
-            <!-- Columna Derecha: Tabla de Registros Recientes -->
+            <!-- Columna Derecha: Registros separados en Entradas y Salidas -->
             <div class="card">
                 <h2 class="mb-4">Registros del Día</h2>
-                <div class="table-container">
-                    <table>
-                        <thead>
-                            <tr>
-                                <th>Person ID</th>
-                                <th>Name</th>
-                                <th>Department</th>
-                                <th>Time</th>
-                            </tr>
-                        </thead>
-                        <tbody id="attendance-tbody">
-                            <!-- Filas cargadas dinámicamente -->
-                        </tbody>
-                    </table>
+                <div class="records-split">
+                    <!-- Entradas -->
+                    <div class="records-col">
+                        <h3>🟢 Entradas <span class="col-count" id="entrada-count"></span></h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Person ID</th>
+                                        <th>Nombre</th>
+                                        <th>Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="entrada-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
+                    <!-- Salidas -->
+                    <div class="records-col">
+                        <h3>🔴 Salidas <span class="col-count" id="salida-count"></span></h3>
+                        <div class="table-container">
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>Person ID</th>
+                                        <th>Nombre</th>
+                                        <th>Hora</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="salida-tbody"></tbody>
+                            </table>
+                        </div>
+                    </div>
                 </div>
             </div>
         </div>
@@ -78,7 +99,10 @@
         const WS_URL = "ws://localhost:8000/ws/attendance";
         const connectionDot = document.getElementById("connection-dot");
         const connectionText = document.getElementById("connection-text");
-        const attendanceTbody = document.getElementById("attendance-tbody");
+        const entradaTbody = document.getElementById("entrada-tbody");
+        const salidaTbody = document.getElementById("salida-tbody");
+        const entradaCount = document.getElementById("entrada-count");
+        const salidaCount = document.getElementById("salida-count");
         const lastRecordCard = document.getElementById("last-record-card");
         const lastRecordContent = document.getElementById("last-record-content");
         const noRecordMessage = document.getElementById("no-record-message");
@@ -130,23 +154,42 @@
                 setTimeout(() => toast.remove(), 300);
             }, 4000);
         }
+        const emptyRow = (msg) => `<tr><td colspan="3" class="text-center" style="color: var(--text-muted); padding: 1.5rem;">${msg}</td></tr>`;
+
+        // Refresca el contador y el mensaje de vacío de cada columna
+        function updateColumnsState() {
+            const nEntradas = entradaTbody.querySelectorAll("tr[data-log]").length;
+            const nSalidas = salidaTbody.querySelectorAll("tr[data-log]").length;
+            entradaCount.innerText = `(${nEntradas})`;
+            salidaCount.innerText = `(${nSalidas})`;
+            if (nEntradas === 0) entradaTbody.innerHTML = emptyRow("Sin entradas hoy.");
+            if (nSalidas === 0) salidaTbody.innerHTML = emptyRow("Sin salidas hoy.");
+        }
+
         // Cargar registros existentes al inicio
         async function fetchRecentAttendance() {
             try {
                 const response = await fetch(`${BACKEND_URL}/api/attendance`);
                 const data = await response.json();
-                
-                attendanceTbody.innerHTML = "";
+
+                entradaTbody.innerHTML = "";
+                salidaTbody.innerHTML = "";
+                // data viene del más reciente al más antiguo; al insertar al inicio
+                // queremos el más reciente arriba, así que recorremos en orden inverso.
+                data.slice().reverse().forEach(log => addAttendanceToTable(log, false));
+                updateColumnsState();
                 if (data.length > 0) {
-                    data.forEach(log => addAttendanceToTable(log, false));
-                    // Mostrar el más reciente en el panel izquierdo
                     updateLastRecordPanel(data[0]);
-                } else {
-                    attendanceTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">No hay asistencias registradas hoy.</td></tr>`;
                 }
             } catch (error) {
                 console.error("Error al cargar asistencias iniciales:", error);
             }
+        }
+        // Devuelve el HTML del badge según el tipo de marcación
+        function eventBadge(eventType) {
+            const t = (eventType || "entrada").toLowerCase();
+            const cls = t === "salida" ? "badge-out" : "badge-in";
+            return `<span class="${cls}">${t}</span>`;
         }
         // Actualizar el panel de la izquierda
         function updateLastRecordPanel(log) {
@@ -156,29 +199,32 @@
             lastEmpId.innerText = `'${log.person_id}`;
             lastEmpDept.innerText = log.department.toUpperCase();
             lastEmpTime.innerText = log.time_formatted;
-            lastEmpDevice.innerText = log.device_info;
+            lastEmpDevice.innerHTML = `${eventBadge(log.event_type)} · ${log.device_info}`;
         }
-        // Agregar fila a la tabla
+        // Agregar fila a la columna correspondiente según el tipo de marcación
         function addAttendanceToTable(log, animate = true) {
-            // Quitar el mensaje de vacío si existe
-            if (attendanceTbody.innerHTML.includes("No hay asistencias")) {
-                attendanceTbody.innerHTML = "";
-            }
+            const isSalida = (log.event_type || "entrada").toLowerCase() === "salida";
+            const tbody = isSalida ? salidaTbody : entradaTbody;
+
+            // Quitar el mensaje de vacío de esa columna si existe
+            const placeholder = tbody.querySelector("tr:not([data-log])");
+            if (placeholder) placeholder.remove();
+
             const tr = document.createElement("tr");
+            tr.setAttribute("data-log", log.id ?? "");
             if (animate) {
                 tr.className = "new-row";
             }
             tr.innerHTML = `
                 <td class="person-id-cell">'${log.person_id}</td>
                 <td>${log.name.toUpperCase()}</td>
-                <td>${log.department.toUpperCase()}</td>
                 <td>${log.time_formatted}</td>
             `;
-            // Agregar al inicio de la tabla (más reciente arriba)
-            if (attendanceTbody.firstChild) {
-                attendanceTbody.insertBefore(tr, attendanceTbody.firstChild);
+            // Agregar al inicio (más reciente arriba)
+            if (tbody.firstChild) {
+                tbody.insertBefore(tr, tbody.firstChild);
             } else {
-                attendanceTbody.appendChild(tr);
+                tbody.appendChild(tr);
             }
         }
         // Inicializar conexión WebSocket
@@ -196,6 +242,7 @@
                 
                 // Actualizar UI
                 addAttendanceToTable(log, true);
+                updateColumnsState();
                 updateLastRecordPanel(log);
                 showToast(log.name, log.department);
                 playBeep();

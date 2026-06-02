@@ -1,0 +1,29 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# Entornos virtuales
+venv/
+.venv/
+env/
+
+# Base de datos local
+*.db
+*.sqlite3
+
+# Configuración local sensible
+backend/.env
+
+# Reportes generados
+*.xlsx
+
+# Fotos de empleados (medios subidos)
+backend/media/
+
+# Editor / SO
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

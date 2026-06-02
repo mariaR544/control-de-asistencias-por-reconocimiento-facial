@@ -15,6 +15,8 @@
             <nav>
                 <ul>
                     <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="empleados.html">Empleados</a></li>
+                    <li><a href="turnos.html">Turnos</a></li>
                     <li><a href="reports.html">Reportes y Excel</a></li>
                     <li><a href="simulador.html" class="active">Simulador de Cámara</a></li>
                 </ul>
@@ -61,6 +63,12 @@
                             <label>Departamento</label>
                             <input type="text" id="new-dept" class="form-control" placeholder="Ej: GUAYAMURI/DOCENTE" required>
                         </div>
+                        <div class="form-group" style="margin-bottom: 0;">
+                            <label>Turno (opcional)</label>
+                            <select id="new-shift" class="form-control">
+                                <option value="">— Sin turno —</option>
+                            </select>
+                        </div>
                         <button type="submit" class="btn">Registrar Empleado</button>
                     </form>
                 </div>
@@ -96,6 +104,23 @@
             line.innerHTML = `[${time}] ${message}`;
             simLog.appendChild(line);
             simLog.scrollTop = simLog.scrollHeight;
+        }
+        // Cargar turnos en el selector del formulario de registro
+        async function loadShiftsSelect() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/shifts`);
+                const shifts = await res.json();
+                const select = document.getElementById("new-shift");
+                select.innerHTML = `<option value="">— Sin turno —</option>`;
+                shifts.forEach(s => {
+                    const opt = document.createElement("option");
+                    opt.value = s.id;
+                    opt.textContent = `${s.name} (${s.standard_hours}h)`;
+                    select.appendChild(opt);
+                });
+            } catch (e) {
+                console.error("No se pudieron cargar los turnos:", e);
+            }
         }
         // Cargar y mostrar empleados desde el servidor
         async function loadEmployees() {
@@ -140,7 +165,8 @@
                 });
                 if (response.ok) {
                     const result = await response.json();
-                    logAction(`¡Marcación registrada con éxito para ${name}!`, "success");
+                    const tipo = (result.recorded_attendance.event_type || "entrada").toUpperCase();
+                    logAction(`¡Marcación de <strong>${tipo}</strong> registrada para ${name}!`, "success");
                 } else {
                     const err = await response.json();
                     logAction(`Fallo en el servidor: ${err.detail || 'Error desconocido'}`, "error");
@@ -156,10 +182,18 @@
             const personId = document.getElementById("new-id").value.trim();
             const name = document.getElementById("new-name").value.trim().toUpperCase();
             const dept = document.getElementById("new-dept").value.trim().toUpperCase();
+            const shiftVal = document.getElementById("new-shift").value;
             logAction(`Registrando nuevo empleado en la base de datos: ${name}...`);
             try {
-                const response = await fetch(`${BACKEND_URL}/api/employees?id=${encodeURIComponent(personId)}&name=${encodeURIComponent(name)}&department=${encodeURIComponent(dept)}`, {
-                    method: "POST"
+                const response = await fetch(`${BACKEND_URL}/api/employees`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({
+                        id: personId,
+                        name: name,
+                        department: dept,
+                        shift_id: shiftVal ? parseInt(shiftVal) : null
+                    })
                 });
                 if (response.ok) {
                     logAction(`Empleado ${name} registrado con éxito.`, "success");
@@ -193,6 +227,7 @@
             }
         });
         // Inicializar
+        loadShiftsSelect();
         loadEmployees();
     </script>
 </body>

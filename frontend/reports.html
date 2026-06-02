@@ -15,6 +15,8 @@
             <nav>
                 <ul>
                     <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="empleados.html">Empleados</a></li>
+                    <li><a href="turnos.html">Turnos</a></li>
                     <li><a href="reports.html" class="active">Reportes y Excel</a></li>
                     <li><a href="simulador.html">Simulador de Cámara</a></li>
                 </ul>
@@ -23,7 +25,8 @@
     </header>
     <main>
         <h1 class="page-title">Reportes y Exportación</h1>
-        <p class="page-subtitle">Filtra el historial de asistencia por rango de fechas y descarga el reporte en formato Excel idéntico al solicitado.</p>
+        <p class="page-subtitle">Filtra por rango de fechas para ver horas trabajadas, horas extra y la bitácora de marcaciones. Descarga el reporte completo en Excel.</p>
+
         <!-- Filtros -->
         <div class="card mb-4">
             <div class="filter-bar">
@@ -36,120 +39,194 @@
                     <input type="date" id="end-date" class="form-control">
                 </div>
                 <div style="display: flex; gap: 0.5rem;">
-                    <button class="btn btn-secondary" id="filter-btn">
-                        🔍 Filtrar Tabla
-                    </button>
-                    <button class="btn" id="export-btn">
-                        📊 Exportar a Excel
-                    </button>
+                    <button class="btn btn-secondary" id="filter-btn">🔍 Filtrar</button>
+                    <button class="btn" id="export-btn">📊 Exportar a Excel</button>
                 </div>
             </div>
         </div>
-        <!-- Tabla de Datos Históricos -->
-        <div class="card">
-            <h2>Registros Encontrados</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="logs-count">
-                Mostrando registros.
-            </p>
-            
+
+        <!-- Tarjetas resumen -->
+        <div class="stats-grid" id="stats-grid"></div>
+
+        <div class="tabs">
+            <button class="tab-btn active" data-tab="resumen">📋 Resumen de Horas</button>
+            <button class="tab-btn" data-tab="marcaciones">🕐 Marcaciones</button>
+        </div>
+
+        <!-- TAB RESUMEN -->
+        <div class="card" id="tab-resumen">
+            <h2 class="mb-4">Horas trabajadas por empleado y día</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="summary-count">Cargando...</p>
             <div class="table-container">
                 <table>
                     <thead>
                         <tr>
                             <th>Person ID</th>
-                            <th>Name</th>
-                            <th>Department</th>
-                            <th>Time</th>
+                            <th>Nombre</th>
+                            <th>Departamento</th>
+                            <th>Turno</th>
+                            <th>Fecha</th>
+                            <th>Entrada</th>
+                            <th>Salida</th>
+                            <th>Trabajadas</th>
+                            <th>Extra</th>
+                            <th>Estado</th>
                         </tr>
                     </thead>
-                    <tbody id="reports-tbody">
+                    <tbody id="summary-tbody"></tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- TAB MARCACIONES -->
+        <div class="card" id="tab-marcaciones" style="display:none;">
+            <h2 class="mb-4">Bitácora de marcaciones</h2>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="logs-count">Cargando...</p>
+            <div class="table-container">
+                <table>
+                    <thead>
                         <tr>
-                            <td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">
-                                Haz clic en Filtrar para cargar los registros.
-                            </td>
+                            <th>Person ID</th>
+                            <th>Nombre</th>
+                            <th>Departamento</th>
+                            <th>Tipo</th>
+                            <th>Fecha y Hora</th>
                         </tr>
-                    </tbody>
+                    </thead>
+                    <tbody id="reports-tbody"></tbody>
                 </table>
             </div>
         </div>
     </main>
+
     <script>
         const BACKEND_URL = "http://localhost:8000";
         const startDateInput = document.getElementById("start-date");
         const endDateInput = document.getElementById("end-date");
-        const filterBtn = document.getElementById("filter-btn");
-        const exportBtn = document.getElementById("export-btn");
+        const summaryTbody = document.getElementById("summary-tbody");
         const reportsTbody = document.getElementById("reports-tbody");
-        const logsCountText = document.getElementById("logs-count");
-        // Configurar fechas por defecto (hoy por defecto)
+
         function setDefaultDates() {
             const today = new Date().toISOString().split('T')[0];
             startDateInput.value = today;
             endDateInput.value = today;
         }
-        // Cargar registros filtrados
-        async function fetchLogs() {
-            const start = startDateInput.value;
-            const end = endDateInput.value;
-            
-            reportsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">Cargando registros...</td></tr>`;
+
+        function buildQuery() {
+            const params = [];
+            if (startDateInput.value) params.push(`start_date=${startDateInput.value}`);
+            if (endDateInput.value) params.push(`end_date=${endDateInput.value}`);
+            return params.length ? "?" + params.join("&") : "";
+        }
+
+        function eventBadge(eventType) {
+            const t = (eventType || "entrada").toLowerCase();
+            return `<span class="${t === "salida" ? "badge-out" : "badge-in"}">${t}</span>`;
+        }
+
+        function fmtDate(iso) {
+            if (!iso) return "—";
+            const d = new Date(iso);
+            return d.toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+        }
+
+        // ---------- Resumen de horas ----------
+        async function fetchSummary() {
+            summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
             try {
-                // Obtenemos todos los registros del endpoint
-                const response = await fetch(`${BACKEND_URL}/api/attendance`);
-                let logs = await response.json();
-                // Filtrar localmente en el frontend para el despliegue del simulador
-                if (start) {
-                    const startDt = new Date(start + "T00:00:00");
-                    logs = logs.filter(log => new Date(log.timestamp) >= startDt);
-                }
-                if (end) {
-                    const endDt = new Date(end + "T23:59:59");
-                    logs = logs.filter(log => new Date(log.timestamp) <= endDt);
-                }
-                // Renderizar tabla
-                reportsTbody.innerHTML = "";
-                logsCountText.innerText = `Se encontraron ${logs.length} registros en el rango seleccionado.`;
-                if (logs.length === 0) {
-                    reportsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: var(--text-muted); padding: 2rem;">No se encontraron asistencias en estas fechas.</td></tr>`;
+                const res = await fetch(`${BACKEND_URL}/api/attendance/summary${buildQuery()}`);
+                const data = await res.json();
+
+                let totalWorked = 0, totalOT = 0, incompletos = 0;
+                data.forEach(s => { totalWorked += s.worked_hours; totalOT += s.overtime_hours; if (s.incomplete) incompletos++; });
+
+                document.getElementById("stats-grid").innerHTML = `
+                    <div class="stat-card"><div class="stat-value">${data.length}</div><div class="stat-label">Días registrados</div></div>
+                    <div class="stat-card"><div class="stat-value">${totalWorked.toFixed(2)} h</div><div class="stat-label">Horas trabajadas</div></div>
+                    <div class="stat-card"><div class="stat-value">${totalOT.toFixed(2)} h</div><div class="stat-label">Horas extra</div></div>
+                    <div class="stat-card"><div class="stat-value">${incompletos}</div><div class="stat-label">Días incompletos</div></div>`;
+
+                document.getElementById("summary-count").innerText = `${data.length} registros (empleado/día) en el rango seleccionado.`;
+                summaryTbody.innerHTML = "";
+                if (data.length === 0) {
+                    summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay datos en estas fechas.</td></tr>`;
                     return;
                 }
-                // El reporte original va en orden ascendente (más antiguo primero) para leer como bitácora cronológica
+                data.forEach(s => {
+                    const tr = document.createElement("tr");
+                    const estado = s.incomplete
+                        ? `<span class="badge-incomplete">Incompleto</span>`
+                        : `<span class="badge-in">Completo</span>`;
+                    const extra = s.overtime_hours > 0
+                        ? `<span class="badge-ot">${s.overtime_hours.toFixed(2)} h</span>`
+                        : `${s.overtime_hours.toFixed(2)} h`;
+                    tr.innerHTML = `
+                        <td class="person-id-cell">'${s.person_id}</td>
+                        <td>${s.name.toUpperCase()}</td>
+                        <td>${s.department.toUpperCase()}</td>
+                        <td>${s.shift_name}</td>
+                        <td>${new Date(s.date + "T00:00:00").toLocaleDateString("es-VE")}</td>
+                        <td>${fmtDate(s.first_in)}</td>
+                        <td>${fmtDate(s.last_out)}</td>
+                        <td><strong>${s.worked_hours.toFixed(2)} h</strong></td>
+                        <td>${extra}</td>
+                        <td>${estado}</td>`;
+                    summaryTbody.appendChild(tr);
+                });
+            } catch (e) {
+                console.error(e);
+                summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor. ¿Está corriendo el backend?</td></tr>`;
+            }
+        }
+
+        // ---------- Marcaciones ----------
+        async function fetchLogs() {
+            reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/attendance${buildQuery()}`);
+                let logs = await res.json();
+                document.getElementById("logs-count").innerText = `${logs.length} marcaciones en el rango seleccionado.`;
+                reportsTbody.innerHTML = "";
+                if (logs.length === 0) {
+                    reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">No se encontraron marcaciones.</td></tr>`;
+                    return;
+                }
+                // Orden cronológico ascendente (bitácora)
                 logs.reverse().forEach(log => {
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
                         <td class="person-id-cell">'${log.person_id}</td>
                         <td>${log.name.toUpperCase()}</td>
                         <td>${log.department.toUpperCase()}</td>
-                        <td>${log.time_formatted}</td>
-                    `;
+                        <td>${eventBadge(log.event_type)}</td>
+                        <td>${log.time_formatted}</td>`;
                     reportsTbody.appendChild(tr);
                 });
-            } catch (error) {
-                console.error("Error al filtrar asistencias:", error);
-                reportsTbody.innerHTML = `<tr><td colspan="4" class="text-center" style="color: #ef4444; padding: 2rem;">Error al conectar con el servidor. Asegúrate de que el backend de Python esté corriendo.</td></tr>`;
+            } catch (e) {
+                reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
             }
         }
-        // Descargar reporte Excel
-        exportBtn.addEventListener("click", () => {
-            const start = startDateInput.value;
-            const end = endDateInput.value;
-            
-            let url = `${BACKEND_URL}/api/attendance/export`;
-            const params = [];
-            
-            if (start) params.push(`start_date=${start}`);
-            if (end) params.push(`end_date=${end}`);
-            
-            if (params.length > 0) {
-                url += "?" + params.join("&");
-            }
-            // Redireccionar para descargar
-            window.location.href = url;
+
+        function refresh() { fetchSummary(); fetchLogs(); }
+
+        // Tabs
+        document.querySelectorAll(".tab-btn").forEach(btn => {
+            btn.addEventListener("click", () => {
+                document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
+                btn.classList.add("active");
+                const tab = btn.dataset.tab;
+                document.getElementById("tab-resumen").style.display = tab === "resumen" ? "block" : "none";
+                document.getElementById("tab-marcaciones").style.display = tab === "marcaciones" ? "block" : "none";
+            });
         });
-        filterBtn.addEventListener("click", fetchLogs);
-        // Inicializar
+
+        document.getElementById("export-btn").addEventListener("click", () => {
+            window.location.href = `${BACKEND_URL}/api/attendance/export${buildQuery()}`;
+        });
+        document.getElementById("filter-btn").addEventListener("click", refresh);
+
         setDefaultDates();
-        fetchLogs();
+        refresh();
     </script>
 </body>
 </html>
