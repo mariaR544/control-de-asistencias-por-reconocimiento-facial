@@ -27,7 +27,6 @@
         <h1 class="page-title">Reportes y Exportación</h1>
         <p class="page-subtitle">Filtra por rango de fechas para ver horas trabajadas, horas extra y la bitácora de marcaciones. Descarga el reporte completo en Excel.</p>
 
-        <!-- Filtros -->
         <div class="card mb-4">
             <div class="filter-bar">
                 <div class="form-group">
@@ -45,7 +44,6 @@
             </div>
         </div>
 
-        <!-- Tarjetas resumen -->
         <div class="stats-grid" id="stats-grid"></div>
 
         <div class="tabs">
@@ -53,7 +51,6 @@
             <button class="tab-btn" data-tab="marcaciones">🕐 Marcaciones</button>
         </div>
 
-        <!-- TAB RESUMEN -->
         <div class="card" id="tab-resumen">
             <h2 class="mb-4">Horas trabajadas por empleado y día</h2>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="summary-count">Cargando...</p>
@@ -78,7 +75,6 @@
             </div>
         </div>
 
-        <!-- TAB MARCACIONES -->
         <div class="card" id="tab-marcaciones" style="display:none;">
             <h2 class="mb-4">Bitácora de marcaciones</h2>
             <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="logs-count">Cargando...</p>
@@ -124,10 +120,11 @@
             return `<span class="${t === "salida" ? "badge-out" : "badge-in"}">${t}</span>`;
         }
 
+        // SE MODIFICÓ ESTA FUNCIÓN PARA MOSTRAR SOLO LA HORA (Ej: 08:53 a. m.)
         function fmtDate(iso) {
             if (!iso) return "—";
             const d = new Date(iso);
-            return d.toLocaleString("es-VE", { day: "2-digit", month: "2-digit", year: "numeric", hour: "2-digit", minute: "2-digit" });
+            return d.toLocaleTimeString("es-VE", { hour: "2-digit", minute: "2-digit" });
         }
 
         // ---------- Resumen de horas ----------
@@ -140,8 +137,10 @@
                 let totalWorked = 0, totalOT = 0, incompletos = 0;
                 data.forEach(s => { totalWorked += s.worked_hours; totalOT += s.overtime_hours; if (s.incomplete) incompletos++; });
 
+                const totalEmpleados = new Set(data.map(s => s.person_id)).size;
+
                 document.getElementById("stats-grid").innerHTML = `
-                    <div class="stat-card"><div class="stat-value">${data.length}</div><div class="stat-label">Días registrados</div></div>
+                    <div class="stat-card"><div class="stat-value">${totalEmpleados}</div><div class="stat-label">Empleados registrados</div></div>
                     <div class="stat-card"><div class="stat-value">${totalWorked.toFixed(2)} h</div><div class="stat-label">Horas trabajadas</div></div>
                     <div class="stat-card"><div class="stat-value">${totalOT.toFixed(2)} h</div><div class="stat-label">Horas extra</div></div>
                     <div class="stat-card"><div class="stat-value">${incompletos}</div><div class="stat-label">Días incompletos</div></div>`;
@@ -191,7 +190,6 @@
                     reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">No se encontraron marcaciones.</td></tr>`;
                     return;
                 }
-                // Orden cronológico ascendente (bitácora)
                 logs.reverse().forEach(log => {
                     const tr = document.createElement("tr");
                     tr.innerHTML = `

@@ -42,7 +42,6 @@
         <h1 class="page-title">Gestión de Empleados</h1>
         <p class="page-subtitle">Agrega, edita y elimina empleados. Sube la foto del rostro y sincronízala con la cámara facial (cuando esté conectada) para el enrolamiento.</p>
 
-        <!-- Formulario crear/editar -->
         <div class="card mb-4">
             <h2 class="mb-4" id="form-title">Agregar empleado</h2>
             <form id="emp-form">
@@ -82,7 +81,6 @@
             </form>
         </div>
 
-        <!-- Listado -->
         <div class="card">
             <h2 class="mb-4">Empleados registrados</h2>
             <div class="table-container">
@@ -94,7 +92,6 @@
                             <th>Nombre</th>
                             <th>Departamento</th>
                             <th>Turno</th>
-                            <th>Tarjeta</th>
                             <th>Cámara</th>
                             <th>Acciones</th>
                         </tr>
@@ -140,13 +137,15 @@
 
         async function loadEmployees() {
             const tbody = document.getElementById("emp-tbody");
-            tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
+            // Se cambió colspan a 7
+            tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/employees`);
                 employees = await res.json();
                 tbody.innerHTML = "";
                 if (employees.length === 0) {
-                    tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay empleados registrados.</td></tr>`;
+                    // Se cambió colspan a 7
+                    tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay empleados registrados.</td></tr>`;
                     return;
                 }
                 employees.forEach(emp => {
@@ -155,13 +154,14 @@
                         ? `<img class="emp-photo" src="${BACKEND_URL}/api/employees/${emp.id}/photo?t=${Date.now()}" alt="">`
                         : `<div class="emp-photo-placeholder">👤</div>`;
                     const shiftName = emp.shift ? `${emp.shift.name}` : "—";
+                    
+                    // SE ELIMINÓ LA CELDA DE TARJETA EN ESTE INNERHTML
                     tr.innerHTML = `
                         <td>${photoCell}</td>
                         <td class="person-id-cell">'${emp.id}</td>
                         <td>${emp.name.toUpperCase()}</td>
                         <td>${emp.department.toUpperCase()}</td>
                         <td>${shiftName}</td>
-                        <td>${emp.card_number || "—"}</td>
                         <td>${cameraBadge(emp.camera_status)}</td>
                         <td class="row-actions">
                             <button class="btn btn-secondary btn-sm" data-edit="${emp.id}">✏️ Editar</button>
@@ -174,7 +174,8 @@
                 tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => deleteEmployee(b.dataset.del)));
                 tbody.querySelectorAll("[data-sync]").forEach(b => b.addEventListener("click", () => syncCamera(b.dataset.sync)));
             } catch (e) {
-                tbody.innerHTML = `<tr><td colspan="8" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
+                // Se cambió colspan a 7
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
             }
         }
 

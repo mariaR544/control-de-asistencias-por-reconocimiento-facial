@@ -1,0 +1,471 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Cámara Escáner Facial - Colegio Guayamuri</title>
+    <link rel="stylesheet" href="css/style.css">
+    <!-- Carga de face-api.js desde CDN -->
+    <script src="https://cdn.jsdelivr.net/npm/@vladmandic/face-api/dist/face-api.js"></script>
+    <style>
+        .camera-container {
+            position: relative;
+            width: 100%;
+            max-width: 640px;
+            margin: 0 auto;
+            border-radius: 16px;
+            overflow: hidden;
+            border: 2px solid var(--border);
+            background: #000;
+            aspect-ratio: 4/3;
+        }
+        #video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        #overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            pointer-events: none;
+        }
+        /* Línea de escaneo láser animada */
+        .scanner-line {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+            background: linear-gradient(to right, transparent, var(--accent), transparent);
+            box-shadow: 0 0 10px var(--accent);
+            animation: scan 3s infinite linear;
+            display: none;
+        }
+        @keyframes scan {
+            0% { top: 0%; }
+            50% { top: 100%; }
+            100% { top: 0%; }
+        }
+        /* Pestañas de modo */
+        .tabs {
+            display: flex;
+            gap: 1rem;
+            margin-bottom: 1.5rem;
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 0.5rem;
+        }
+        .tab-btn {
+            background: none;
+            border: none;
+            color: var(--text-muted);
+            padding: 0.5rem 1rem;
+            cursor: pointer;
+            font-size: 1rem;
+            font-weight: 600;
+            transition: var(--transition);
+            border-radius: 8px;
+        }
+        .tab-btn.active {
+            color: var(--primary);
+            background: rgba(76, 175, 80, 0.1);
+        }
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border-left-color: var(--primary);
+            animation: spin 1s linear infinite;
+            margin: 2rem auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        #loading-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: var(--bg-surface);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 10;
+        }
+    </style>
+</head>
+<body>
+    <header>
+        <div class="nav-container">
+            <div class="logo">
+                Colegio <span>Guayamuri</span>
+            </div>
+            <nav>
+                <ul>
+                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="simulador.html">Registro de empleados</a></li>
+                    <li><a href="camara.html" class="active">Cámara </a></li>
+                </ul>
+            </nav>
+        </div>
+    </header>
+    <main>
+        <h1 class="page-title">Escáner Facial Web</h1>
+        <p class="page-subtitle">Utiliza la cámara web de esta computadora para registrar asistencias reales o inscribir rostros.</p>
+        <div class="tabs">
+            <button class="tab-btn active" id="tab-scan" onclick="switchMode('scan')">🔍 Modo Escáner (Reconocimiento)</button>
+            <button class="tab-btn" id="tab-enroll" onclick="switchMode('enroll')">👤 Modo Registro (Enrolar Rostros)</button>
+        </div>
+        <div class="dashboard-grid">
+            <!-- Columna Izquierda: Cámara -->
+            <div class="card" style="position: relative;">
+                
+                <!-- Pantalla de carga mientras se bajan los modelos de IA -->
+                <div id="loading-overlay">
+                    <div class="spinner"></div>
+                    <h3 id="loading-text">Cargando modelos de Inteligencia Artificial...</h3>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-top: 0.5rem; text-align: center; max-width: 80%;">
+                        Esto descarga los modelos de reconocimiento facial desde un servidor de alta velocidad la primera vez.
+                    </p>
+                </div>
+                <div class="camera-container">
+                    <video id="video" autoplay muted playsinline></video>
+                    <canvas id="overlay"></canvas>
+                    <div class="scanner-line" id="scanner-line"></div>
+                </div>
+                <div class="text-center mt-4">
+                    <button class="btn" id="start-camera-btn" onclick="startCamera()">
+                        📷 Encender Cámara
+                    </button>
+                </div>
+            </div>
+            <!-- Columna Derecha: Panel de Control Dinámico -->
+            <div class="card" id="control-panel">
+                <!-- Contenido dinámico según modo -->
+                <div id="panel-scan-content">
+                    <h2>Detección en Tiempo Real</h2>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+                        Posiciónate frente a la cámara. El sistema comparará tu rostro con los perfiles registrados localmente.
+                    </p>
+                    <div id="recognition-status" style="background: rgba(0,0,0,0.2); border-radius: 8px; padding: 1.5rem; border: 1px solid var(--border); text-align: center;">
+                        <span style="font-size: 2.5rem;">📷</span>
+                        <h3 class="mt-4">Cámara lista</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem;" id="scan-hint">Enciende la cámara para comenzar el escaneo automático.</p>
+                    </div>
+                </div>
+                <div id="panel-enroll-content" style="display: none;">
+                    <h2>Registrar Rostro de Empleado</h2>
+                    <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;">
+                        Asocia las características faciales capturadas a un empleado registrado en el sistema.
+                    </p>
+                    
+                    <div class="form-group">
+                        <label for="enroll-employee-select">Selecciona el Empleado</label>
+                        <select id="enroll-employee-select" class="form-control">
+                            <option value="">Cargando empleados...</option>
+                        </select>
+                    </div>
+                    <button class="btn" id="enroll-btn" style="width: 100%; margin-top: 1rem;" onclick="enrollFace()" disabled>
+                        💾 Capturar y Guardar Rostro
+                    </button>
+                    <div style="margin-top: 2rem; padding: 1rem; background: rgba(76,175,80,0.05); border: 1px solid var(--border-active); border-radius: 8px;">
+                        <h4>¿Cómo registrar?</h4>
+                        <ol style="padding-left: 1.25rem; font-size: 0.85rem; color: var(--text-muted); margin-top: 0.5rem; display: flex; flex-direction: column; gap: 0.5rem;">
+                            <li>Enciende la cámara.</li>
+                            <li>Selecciona al empleado en la lista superior.</li>
+                            <li>Mira fijamente a la cámara y asegúrate de que el recuadro verde encuadre tu rostro.</li>
+                            <li>Haz clic en "Capturar y Guardar Rostro".</li>
+                        </ol>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+    <script>
+        const BACKEND_URL = "http://localhost:8000";
+        // Cargamos los modelos de pesos directamente desde CDN
+        const MODEL_URL = "https://cdn.jsdelivr.net/npm/@vladmandic/face-api/model/";
+        const video = document.getElementById("video");
+        const overlay = document.getElementById("overlay");
+        const scannerLine = document.getElementById("scanner-line");
+        const loadingOverlay = document.getElementById("loading-overlay");
+        const loadingText = document.getElementById("loading-text");
+        const startCameraBtn = document.getElementById("start-camera-btn");
+        const enrollEmployeeSelect = document.getElementById("enroll-employee-select");
+        const enrollBtn = document.getElementById("enroll-btn");
+        let modelsLoaded = false;
+        let currentMode = 'scan'; // 'scan' o 'enroll'
+        let localFaceDescriptors = []; // Array de { id, name, descriptor }
+        let recognitionActive = false;
+        let lastRecognizedId = null;
+        let lastRecognizedTime = 0;
+        // Inicialización y carga de modelos
+        async function loadModels() {
+            try {
+                loadingText.innerText = "Cargando modelo de detección (1/3)...";
+                await faceapi.nets.ssdMobilenetv1.loadFromUri(MODEL_URL);
+                
+                loadingText.innerText = "Cargando modelo de rasgos faciales (2/3)...";
+                await faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL);
+                
+                loadingText.innerText = "Cargando modelo de reconocimiento facial (3/3)...";
+                await faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL);
+                modelsLoaded = true;
+                loadingOverlay.style.display = "none";
+                console.log("Modelos de face-api.js cargados correctamente.");
+                
+                // Cargar empleados de la base de datos y local storage
+                await loadEmployees();
+                loadStoredDescriptors();
+            } catch (err) {
+                console.error("Fallo al cargar modelos:", err);
+                loadingText.innerHTML = "<span style='color:#ef4444;'>Error al cargar modelos. Revisa tu conexión a internet.</span>";
+            }
+        }
+        // Cargar empleados desde el backend
+        async function loadEmployees() {
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/employees`);
+                const employees = await response.json();
+                
+                enrollEmployeeSelect.innerHTML = '<option value="">-- Seleccionar empleado --</option>';
+                employees.forEach(emp => {
+                    const opt = document.createElement("option");
+                    opt.value = emp.id;
+                    opt.text = `${emp.name} (${emp.department})`;
+                    enrollEmployeeSelect.appendChild(opt);
+                });
+            } catch (error) {
+                console.error("Error al cargar empleados para selección:", error);
+                enrollEmployeeSelect.innerHTML = '<option value="">Error al cargar empleados del servidor</option>';
+            }
+        }
+        // Cargar plantillas de rostros guardadas en Local Storage
+        function loadStoredDescriptors() {
+            localFaceDescriptors = [];
+            for (let i = 0; i < localStorage.length; i++) {
+                const key = localStorage.key(i);
+                if (key.startsWith("face_descriptor_")) {
+                    const empId = key.replace("face_descriptor_", "");
+                    const data = JSON.parse(localStorage.getItem(key));
+                    localFaceDescriptors.push({
+                        id: empId,
+                        name: data.name,
+                        descriptor: new Float32Array(data.descriptor)
+                    });
+                }
+            }
+            console.log(`Cargadas ${localFaceDescriptors.length} plantillas faciales locales.`);
+        }
+        // Encender cámara web
+        async function startCamera() {
+            if (!modelsLoaded) return;
+            
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { width: 640, height: 480, facingMode: "user" } 
+                });
+                video.srcObject = stream;
+                
+                // Ocultar botón y configurar overlay cuando el video empiece a reproducir
+                video.onplay = () => {
+                    startCameraBtn.style.display = "none";
+                    scannerLine.style.display = "block";
+                    enrollBtn.disabled = false;
+                    
+                    // Ajustar el canvas al tamaño real del video
+                    const displaySize = { width: video.videoWidth, height: video.videoHeight };
+                    faceapi.matchDimensions(overlay, displaySize);
+                    
+                    if (currentMode === 'scan') {
+                        startRecognitionLoop();
+                    }
+                };
+            } catch (err) {
+                console.error("Error al abrir cámara:", err);
+                alert("No se pudo acceder a la cámara. Asegúrate de dar permisos de cámara al navegador.");
+            }
+        }
+        // Cambiar pestañas
+        function switchMode(mode) {
+            currentMode = mode;
+            document.getElementById("tab-scan").className = mode === 'scan' ? "tab-btn active" : "tab-btn";
+            document.getElementById("tab-enroll").className = mode === 'enroll' ? "tab-btn active" : "tab-btn";
+            
+            document.getElementById("panel-scan-content").style.display = mode === 'scan' ? "block" : "none";
+            document.getElementById("panel-enroll-content").style.display = mode === 'enroll' ? "block" : "none";
+            if (mode === 'scan') {
+                startRecognitionLoop();
+            } else {
+                recognitionActive = false;
+                const context = overlay.getContext("2d");
+                context.clearRect(0, 0, overlay.width, overlay.height);
+            }
+        }
+        // Loop de reconocimiento facial en tiempo real
+        async function startRecognitionLoop() {
+            if (recognitionActive || currentMode !== 'scan' || !video.srcObject) return;
+            recognitionActive = true;
+            const displaySize = { width: video.videoWidth, height: video.videoHeight };
+            const statusDiv = document.getElementById("recognition-status");
+            const scanHint = document.getElementById("scan-hint");
+            while (recognitionActive && !video.paused && !video.ended) {
+                // Detectar cara, puntos de referencia y vector descriptor (128 floats)
+                const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.5 }))
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+                const context = overlay.getContext("2d");
+                context.clearRect(0, 0, overlay.width, overlay.height);
+                if (detection) {
+                    // Ajustar detección al tamaño del canvas
+                    const resizedDetection = faceapi.resizeResults(detection, displaySize);
+                    
+                    // Comparar con plantillas locales si hay alguna guardada
+                    let matchedName = "Desconocido";
+                    let matchedId = null;
+                    let bestMatchDist = 1.0;
+                    if (localFaceDescriptors.length > 0) {
+                        // Buscar el descriptor más cercano por distancia euclidiana
+                        localFaceDescriptors.forEach(stored => {
+                            const distance = faceapi.euclideanDistance(detection.descriptor, stored.descriptor);
+                            if (distance < bestMatchDist) {
+                                bestMatchDist = distance;
+                                if (distance < 0.6) { // Umbral de coincidencia estándar
+                                    matchedName = stored.name;
+                                    matchedId = stored.id;
+                                }
+                            }
+                        });
+                    }
+                    // Dibujar el cuadro y nombre en pantalla
+                    const box = resizedDetection.detection.box;
+                    context.strokeStyle = matchedId ? "#4caf50" : "#ef4444";
+                    context.lineWidth = 3;
+                    context.strokeRect(box.x, box.y, box.width, box.height);
+                    context.fillStyle = matchedId ? "#4caf50" : "#ef4444";
+                    context.font = "bold 16px sans-serif";
+                    context.fillText(
+                        `${matchedName} (Dist: ${bestMatchDist.toFixed(2)})`, 
+                        box.x, 
+                        box.y - 10
+                    );
+                    // Registrar asistencia si coincide y no fue la misma persona en los últimos 10 segundos
+                    if (matchedId) {
+                        const now = Date.now();
+                        if (matchedId !== lastRecognizedId || (now - lastRecognizedTime > 10000)) {
+                            lastRecognizedId = matchedId;
+                            lastRecognizedTime = now;
+                            
+                            triggerAttendanceRegister(matchedId, matchedName);
+                        }
+                    }
+                    statusDiv.style.borderColor = matchedId ? "var(--primary)" : "rgba(239, 68, 68, 0.4)";
+                    statusDiv.innerHTML = `
+                        <span style="font-size: 2.5rem;">${matchedId ? '✅' : '🔍'}</span>
+                        <h3 class="mt-4" style="color: ${matchedId ? 'var(--accent)' : 'var(--text-main)'}">${matchedName}</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem;">Distancia: ${bestMatchDist.toFixed(2)}</p>
+                    `;
+                } else {
+                    statusDiv.style.borderColor = "var(--border)";
+                    statusDiv.innerHTML = `
+                        <span style="font-size: 2.5rem;">🔍</span>
+                        <h3 class="mt-4">Buscando Rostro...</h3>
+                        <p style="color: var(--text-muted); font-size: 0.85rem;">Párate frente a la cámara para escanear.</p>
+                    `;
+                }
+                // Esperar un frame
+                await new Promise(r => setTimeout(r, 100));
+            }
+            recognitionActive = false;
+        }
+        // Registrar asistencia en el backend (Emula el envío de la cámara Hikvision)
+        async function triggerAttendanceRegister(personId, name) {
+            console.log(`Registrando asistencia automática por rostro para: ${name} (${personId})`);
+            try {
+                const response = await fetch(`${BACKEND_URL}/api/hikvision/event`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json"
+                    },
+                    body: JSON.stringify({
+                        person_id: personId,
+                        device_info: "Cámara Escáner Web"
+                    })
+                });
+                if (response.ok) {
+                    // Reproducir pitido de confirmación en la misma pestaña
+                    playBeepConfirm();
+                }
+            } catch (err) {
+                console.error("Error al reportar asistencia por cámara web:", err);
+            }
+        }
+        // Tono acústico de confirmación
+        function playBeepConfirm() {
+            try {
+                const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = audioCtx.createOscillator();
+                const gainNode = audioCtx.createGain();
+                oscillator.type = 'sine';
+                oscillator.frequency.setValueAtTime(1000, audioCtx.currentTime); // 1000Hz para cámara
+                gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.2);
+                oscillator.connect(gainNode);
+                gainNode.connect(audioCtx.destination);
+                oscillator.start();
+                oscillator.stop(audioCtx.currentTime + 0.2);
+            } catch (e) {
+                console.log("No se pudo reproducir audio:", e);
+            }
+        }
+        // Enrolar rostro (Guardar descriptor en Local Storage)
+        async function enrollFace() {
+            const empId = enrollEmployeeSelect.value;
+            if (!empId) {
+                alert("Por favor selecciona un empleado antes de capturar el rostro.");
+                return;
+            }
+            const empName = enrollEmployeeSelect.options[enrollEmployeeSelect.selectedIndex].text.split(" (")[0];
+            enrollBtn.disabled = true;
+            enrollBtn.innerText = "Analizando rostro...";
+            try {
+                const detection = await faceapi.detectSingleFace(video, new faceapi.SsdMobilenetv1Options({ minConfidence: 0.6 }))
+                    .withFaceLandmarks()
+                    .withFaceDescriptor();
+                if (!detection) {
+                    alert("No se detectó ningún rostro estable en la cámara. Acércate más y asegúrate de tener buena luz.");
+                    enrollBtn.disabled = false;
+                    enrollBtn.innerText = "💾 Capturar y Guardar Rostro";
+                    return;
+                }
+                // Guardar en LocalStorage
+                const key = `face_descriptor_${empId}`;
+                const payload = {
+                    name: empName,
+                    descriptor: Array.from(detection.descriptor) // Convertir Float32Array a Array JSON
+                };
+                localStorage.setItem(key, JSON.stringify(payload));
+                
+                alert(`¡Rostro de "${empName}" registrado con éxito localmente!`);
+                loadStoredDescriptors(); // Recargar base local de vectores
+                
+            } catch (err) {
+                console.error("Error durante enrolamiento:", err);
+                alert("Error al procesar el rostro. Intenta de nuevo.");
+            } finally {
+                enrollBtn.disabled = false;
+                enrollBtn.innerText = "💾 Capturar y Guardar Rostro";
+            }
+        }
+        // Iniciar
+        loadModels();
+    </script>
+</body>
+</html>
