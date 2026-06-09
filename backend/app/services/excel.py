@@ -45,11 +45,11 @@ def _autofit(ws):
             max_len = max(max_len, cell_len)
         ws.column_dimensions[col_letter].width = max(max_len + 3, 12)
 
-
+# --- MODIFICADO: Ahora solo devuelve la hora y los minutos (ej: 08:30) ---
 def _fmt_time(iso_str):
     if not iso_str:
         return "—"
-    return datetime.fromisoformat(iso_str).strftime("%d/%m/%Y %H:%M")
+    return datetime.fromisoformat(iso_str).strftime("%I:%M %p") # Formato 12 horas con AM/PM. Cambia a "%H:%M" si prefieres 24 horas.
 
 
 def generate_attendance_excel(logs, sheet_name="Asistencia"):

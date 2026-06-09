@@ -37,6 +37,7 @@
                     <label for="end-date">Fecha de Fin</label>
                     <input type="date" id="end-date" class="form-control">
                 </div>
+                
                 <div style="display: flex; gap: 0.5rem;">
                     <button class="btn btn-secondary" id="filter-btn">🔍 Filtrar</button>
                     <button class="btn" id="export-btn">📊 Exportar a Excel</button>
@@ -94,18 +95,34 @@
             </div>
         </div>
     </main>
-
-    <script>
+<script>
         const BACKEND_URL = "http://localhost:8000";
         const startDateInput = document.getElementById("start-date");
         const endDateInput = document.getElementById("end-date");
         const summaryTbody = document.getElementById("summary-tbody");
         const reportsTbody = document.getElementById("reports-tbody");
 
+        // --- MODIFICADO: Ahora calcula automáticamente la quincena actual ---
         function setDefaultDates() {
-            const today = new Date().toISOString().split('T')[0];
-            startDateInput.value = today;
-            endDateInput.value = today;
+            const now = new Date();
+            const year = now.getFullYear();
+            const month = String(now.getMonth() + 1).padStart(2, '0');
+            const day = now.getDate();
+
+            let startDay, endDay;
+
+            if (day <= 15) {
+                startDay = "01";
+                endDay = "15";
+            } else {
+                startDay = "16";
+                // Consigue el último día del mes actual de forma dinámica
+                const lastDay = new Date(year, now.getMonth() + 1, 0).getDate();
+                endDay = String(lastDay).padStart(2, '0');
+            }
+
+            startDateInput.value = `${year}-${month}-${startDay}`;
+            endDateInput.value = `${year}-${month}-${endDay}`;
         }
 
         function buildQuery() {
@@ -120,7 +137,6 @@
             return `<span class="${t === "salida" ? "badge-out" : "badge-in"}">${t}</span>`;
         }
 
-        // SE MODIFICÓ ESTA FUNCIÓN PARA MOSTRAR SOLO LA HORA (Ej: 08:53 a. m.)
         function fmtDate(iso) {
             if (!iso) return "—";
             const d = new Date(iso);

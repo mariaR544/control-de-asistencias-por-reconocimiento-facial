@@ -388,6 +388,13 @@ def _serialize_log(log: AttendanceLog) -> dict:
         "device_info": "Cámara Hikvision",
     }
 
+@app.get("/api/departments")
+def get_departments(db: Session = Depends(get_db)):
+    # Busca todos los departamentos diferentes asignados a los empleados
+    departments = db.query(Employee.department).distinct().all()
+    # Limpia el resultado para devolver una lista simple de textos
+    return [d[0] for d in departments if d[0]]
+
 
 @app.get("/api/attendance")
 def get_attendance(
@@ -406,19 +413,22 @@ def get_attendance(
 
 
 @app.get("/api/attendance/summary")
-def get_attendance_summary(
-    start_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    end_date: Optional[str] = Query(None, description="YYYY-MM-DD"),
-    db: Session = Depends(get_db),
+def get_summary(
+    start_date: str = None, 
+    end_date: str = None, 
+    department: str = Query(None), # <-- Nuevo parámetro de filtro
+    db: Session = Depends(get_db)
 ):
-    start_dt, end_dt = _parse_date_range(start_date, end_date)
-    query = db.query(AttendanceLog).options(
-        joinedload(AttendanceLog.employee).joinedload(Employee.shift)
-    )
-    if start_dt:
-        query = query.filter(AttendanceLog.timestamp >= start_dt)
-    if end_dt:
-        query = query.filter(AttendanceLog.timestamp <= end_dt)
+    # Unimos (JOIN) las marcaciones con los empleados para poder filtrar por su departamento
+    query = db.query(AttendanceLog).join(Employee)
+    
+    if start_date:
+        query = query.filter(AttendanceLog.timestamp >= f"{start_date} 00:00:00")
+    if end_date:
+        query = query.filter(AttendanceLog.timestamp <= f"{end_date} 23:59:59")
+    if department:
+        query = query.filter(Employee.department == department) # <-- Filtrado activo
+        
     logs = query.all()
     return build_daily_summaries(logs)
 
