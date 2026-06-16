@@ -10,16 +10,22 @@ class Settings(BaseSettings):
     MEDIA_DIR: str = "media/employee_photos"
 
     # --- Cámara Hikvision (enrolamiento por ISAPI). Vacío = aún no configurada ---
+    HIKVISION_USER: str = "admin"
+    HIKVISION_PASS: str = "Hikvision12"  # Reemplázalo por la clave real de tu equipo
+    HIKVISION_IP: str = "192.168.0.51"
     HIKVISION_HOST: str = ""          # Ej: "192.168.1.64" (sin http://)
     HIKVISION_PORT: int = 80
-    HIKVISION_USER: str = ""
-    HIKVISION_PASSWORD: str = ""
+    #HIKVISION_USER: str = ""
+    #HIKVISION_PASSWORD: str = ""
     HIKVISION_USE_HTTPS: bool = False
 
     # --- Reconciliación automática (recupera marcaciones guardadas en la cámara) ---
     RECONCILE_ENABLED: bool = True            # job de fondo activado
     RECONCILE_INTERVAL_MINUTES: int = 10      # cada cuánto consulta la cámara
     RECONCILE_LOOKBACK_DAYS: int = 2          # ventana hacia atrás que revisa cada ciclo
+
+    class Config:
+        env_file = ".env"
 
     @property
     def hikvision_configured(self) -> bool:

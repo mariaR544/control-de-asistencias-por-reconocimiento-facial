@@ -36,7 +36,7 @@ class EmployeeBase(BaseModel):
 
 
 class EmployeeCreate(EmployeeBase):
-    pass
+    photo_base64: Optional[str] = None
 
 
 class EmployeeUpdate(BaseModel):

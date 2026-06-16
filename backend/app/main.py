@@ -5,9 +5,27 @@ from contextlib import asynccontextmanager
 from datetime import datetime, date, time, timedelta
 from typing import List, Optional
 
+import httpx
+from fastapi import HTTPException
+
+import base64
+from fastapi import HTTPException, Depends
+from pydantic import BaseModel
+import uuid
+from datetime import datetime
+from sqlalchemy.orm import Session
+from app.database import get_db
+from app.models import Employee, AttendanceLog
+
+import re
+import json
+
+
+from fastapi.staticfiles import StaticFiles
 from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, Query, UploadFile, File
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
+from fastapi import Request
 from sqlalchemy import inspect, text
 from sqlalchemy.orm import Session, joinedload
 
@@ -31,6 +49,16 @@ MAX_PHOTO_BYTES = 5 * 1024 * 1024  # 5 MB
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+class EmployeeCreate(BaseModel):
+    id: str
+    name: str
+    department: str
+    shift_id: Optional[int] = None
+    card_number: Optional[str] = None
+    photo_base64: Optional[str] = None  # <-- Campo clave para recibir el disparo en vivo
+# Usamos settings.MEDIA_DIR que apunta a "media/employee_photos" en tu config.py
+EMPLEADOS_FOTOS_DIR = settings.MEDIA_DIR
+os.makedirs(EMPLEADOS_FOTOS_DIR, exist_ok=True)  # Crea la carpeta automáticamente si no existe
 
 def run_light_migrations():
     """Migración ligera para bases SQLite existentes: agrega columnas nuevas
@@ -256,8 +284,8 @@ def delete_shift(shift_id: int, db: Session = Depends(get_db)):
 # ============================ EMPLEADOS ============================
 @app.get("/api/employees", response_model=List[EmployeeOut])
 def get_employees(db: Session = Depends(get_db)):
+    """Trae la lista completa para rellenar la tabla HTML (Tu función original)"""
     return db.query(Employee).options(joinedload(Employee.shift)).all()
-
 
 @app.post("/api/employees", response_model=EmployeeOut, status_code=201)
 def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
@@ -272,23 +300,57 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
     return emp
 
 
-@app.put("/api/employees/{employee_id}", response_model=EmployeeOut)
-def update_employee(employee_id: str, payload: EmployeeUpdate, db: Session = Depends(get_db)):
-    emp = db.query(Employee).filter(Employee.id == employee_id).first()
-    if not emp:
-        raise HTTPException(status_code=404, detail="Empleado no encontrado.")
-    data = payload.model_dump(exclude_unset=True)
-    if data.get("shift_id") is not None and not db.query(Shift).filter(Shift.id == data["shift_id"]).first():
-        raise HTTPException(status_code=400, detail="El turno indicado no existe.")
-    for k, v in data.items():
-        setattr(emp, k, v)
-    # Si cambian datos enrolados en la cámara, marcar para re-sincronizar.
-    if "name" in data or "card_number" in data:
-        emp.camera_status = "pendiente"
-        emp.camera_synced_at = None
-    db.commit()
-    db.refresh(emp)
-    return emp
+@app.post("/api/employees", response_model=EmployeeOut)
+def create_employee(employee_data: EmployeeCreate, db: Session = Depends(get_db)):
+    """Registra al empleado en SQLite y guarda su foto de hardware si existe"""
+    try:
+        # 1. Validar duplicados
+        existing_emp = db.query(Employee).filter(Employee.id == employee_data.id).first()
+        if existing_emp:
+            raise HTTPException(status_code=400, detail="El ID de este empleado ya está registrado.")
+
+        nombre_archivo_perfil = None
+
+        # 2. Si el frontend envía una foto capturada en Base64 por la cámara
+        if hasattr(employee_data, 'photo_base64') and employee_data.photo_base64 and "base64," in employee_data.photo_base64:
+            try:
+                header, data_base64 = employee_data.photo_base64.split("base64,")
+                imagen_binaria = base64.b64decode(data_base64)
+                
+                nombre_archivo_perfil = f"perfil_{employee_data.id}.jpg"
+                
+                # Crear directorio si no existe usando tu config
+                os.makedirs(settings.MEDIA_DIR, exist_ok=True)
+                ruta_guardado = os.path.join(settings.MEDIA_DIR, nombre_archivo_perfil)
+                
+                with open(ruta_guardado, "wb") as f:
+                    f.write(imagen_binaria)
+                logger.info(f"Foto de enrolamiento guardada en: {ruta_guardado}")
+            except Exception as e_img:
+                logger.error(f"Error al escribir la imagen: {str(e_img)}")
+
+        # 3. Insertar usando los campos exactos de tu models.py (photo_path)
+        nuevo_empleado = Employee(
+            id=employee_data.id,
+            name=employee_data.name,
+            department=employee_data.department,
+            shift_id=employee_data.shift_id,
+            card_number=employee_data.card_number,
+            photo_path=nombre_archivo_perfil,  # Tu columna real
+            camera_status="pendiente"
+        )
+        
+        db.add(nuevo_empleado)
+        db.commit()
+        db.refresh(nuevo_empleado)
+        return nuevo_empleado
+
+    except HTTPException as he:
+        raise he
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Fallo al crear empleado: {str(e)}")
+        raise HTTPException(status_code=500, detail="Error interno al procesar el registro.")
 
 
 @app.delete("/api/employees/{employee_id}")
@@ -439,47 +501,91 @@ def clear_attendance(db: Session = Depends(get_db)):
     db.commit()
     return {"message": "Logs de asistencia vaciados correctamente."}
 
+#integracion hkvision
+CARPETA_FOTOS = os.path.join("backend", "static", "captured_faces")
+os.makedirs(CARPETA_FOTOS, exist_ok=True)
 
 @app.post("/api/hikvision/event")
-async def receive_hikvision_event(payload: HikvisionEvent, db: Session = Depends(get_db)):
-    person_id = payload.person_id
+async def receive_hikvision_event(request: Request, db: Session = Depends(get_db)):
+    try:
+        # 1. Leer el cuerpo de la tabla enviado por la cámara
+        body_bytes = await request.body()
+        body_text = body_bytes.decode("utf-8", errors="ignore")
+        
+        # 2. Extraer el ID o número de empleado/tarjeta
+        person_id = None
+        match_id = re.search(r'"employeeNoString"\s*:\s*"([^"]+)"', body_text)
+        if match_id:
+            person_id = match_id.group(1)
+            
+        if not person_id:
+            logger.warning("Se recibió la tabla de la cámara pero no tenía un employeeNoString válido.")
+            return {"status": "ignored"}
 
-    employee = db.query(Employee).filter(Employee.id == person_id).first()
-    if not employee:
-        employee = Employee(id=person_id, name="Empleado Desconocido", department="Por Asignar")
-        db.add(employee)
-        db.commit()
-        db.refresh(employee)
+        # 3. EXTRAER LA IMAGEN CAPTURADA DE LA TABLA
+        nombre_archivo_foto = None
+        
+        # Buscamos campos comunes de imagen de Hikvision (faceImageString o JPEGPicWithData)
+        match_foto = re.search(r'"faceImageString"\s*:\s*"([^"]+)"', body_text)
+        if not match_foto:
+            match_foto = re.search(r'"JPEGPicWithData"\s*:\s*"([^"]+)"', body_text)
 
-    now = datetime.now()
+        if match_foto:
+            logger.info(f"¡Imagen localizada en la tabla para el ID: {person_id}! Procesando...")
+            base64_data = match_foto.group(1)
+            
+            try:
+                # Decodificar el texto plano a un archivo binario (.jpg)
+                imagen_binaria = base64.b64decode(base64_data)
+                
+                # Crear un nombre único para que no se sobrescriban las fotos
+                nombre_archivo_foto = f"rostro_{person_id}_{uuid.uuid4().hex[:6]}.jpg"
+                ruta_final = os.path.join(CARPETA_FOTOS, nombre_archivo_foto)
+                
+                # Guardar la foto físicamente en la laptop
+                with open(ruta_final, "wb") as archivo_imagen:
+                    archivo_imagen.write(imagen_binaria)
+                logger.info(f"Foto guardada con éxito en: {ruta_final}")
+                
+            except Exception as error_decodificacion:
+                logger.error(f"No se pudo decodificar el Base64 de la imagen: {error_decodificacion}")
 
-    # Determinar entrada/salida: respeta el tipo enviado por la cámara si viene;
-    # de lo contrario alterna según las marcas del día.
-    if payload.event_type in ("entrada", "salida"):
-        event_type = payload.event_type
-    else:
-        today_start = datetime.combine(now.date(), time.min)
-        today_end = datetime.combine(now.date(), time.max)
-        marks_today = (
-            db.query(AttendanceLog)
-            .filter(
-                AttendanceLog.person_id == person_id,
-                AttendanceLog.timestamp >= today_start,
-                AttendanceLog.timestamp <= today_end,
-            )
-            .count()
+        # 4. GUARDAR EN LA BASE DE DATOS SQLITE
+        # Buscar si el empleado ya existe en tu BDD
+        employee = db.query(Employee).filter(Employee.id == person_id).first()
+        if not employee:
+            employee = Employee(id=person_id, name="Usuario Nuevo", department="Por Asignar")
+            db.add(employee)
+            db.commit()
+            db.refresh(employee)
+
+        # Insertar el registro de asistencia asociando el nombre de la foto guardada
+        # Nota: Asegúrate de que tu modelo AttendanceLog tenga la columna 'captured_photo_url'
+        nuevo_log = AttendanceLog(
+            person_id=person_id, 
+            timestamp=datetime.now(),
+            captured_photo_url=nombre_archivo_foto  # Guardamos el nombre de la imagen
         )
-        event_type = determine_next_event_type(marks_today)
+        db.add(nuevo_log)
+        db.commit()
+        db.refresh(nuevo_log)
 
-    log = AttendanceLog(person_id=person_id, timestamp=now, event_type=event_type)
-    db.add(log)
-    db.commit()
-    db.refresh(log)
+        # 5. ENVIAR EN TIEMPO REAL AL FRONTEND (WebSocket)
+        datos_pantalla = {
+            "id": nuevo_log.log_id,
+            "person_id": nuevo_log.person_id,
+            "name": employee.name,
+            "timestamp": nuevo_log.timestamp.strftime("%d/%m/%Y %H:%M:%S"),
+            # Esta ruta le permitirá al frontend cargar la imagen directamente en una etiqueta <img>
+            "foto_url": f"/static/captured_faces/{nombre_archivo_foto}" if nombre_archivo_foto else None
+        }
+        
+        await manager.broadcast(datos_pantalla)
+        return {"status": "success", "message": "Asistencia y foto procesadas"}
 
-    websocket_payload = _serialize_log(log)
-    await manager.broadcast(websocket_payload)
-    return {"status": "success", "recorded_attendance": websocket_payload}
-
+    except Exception as e:
+        logger.error(f"Error al procesar la tabla de la cámara: {str(e)}")
+        return {"status": "error"}
 
 def _get_or_create_employee(db: Session, person_id: str) -> Employee:
     emp = db.query(Employee).filter(Employee.id == person_id).first()
@@ -591,3 +697,34 @@ async def websocket_endpoint(websocket: WebSocket):
     except Exception as e:
         logger.error(f"Error en WebSocket: {e}")
         manager.disconnect(websocket)
+
+app.mount("/static", StaticFiles(directory="backend/static"), name="static")
+
+@app.post("/api/employees/capture-live-hardware")
+async def capture_live_hardware():
+    """Se conecta a la cámara Hikvision usando los parámetros reales de config.py"""
+    protocolo = "https" if settings.HIKVISION_USE_HTTPS else "http"
+    # Cambiado a settings.HIKVISION_IP y settings.HIKVISION_PORT para que lea tu archivo config.py real
+    url = f"{protocolo}://{settings.HIKVISION_IP}:{settings.HIKVISION_PORT}/ISAPI/Streaming/channels/101/picture"
+    
+    try:
+        # Ajustado a tus nombres de variables de configuración: HIKVISION_USER y HIKVISION_PASS
+        auth = httpx.DigestAuth(settings.HIKVISION_USER, settings.HIKVISION_PASS)
+        
+        async with httpx.AsyncClient(auth=auth) as client:
+            response = await client.get(url, timeout=5.0)
+            
+            if response.status_code == 200:
+                logger.info("¡Captura de hardware obtenida con éxito!")
+                encoded_image = base64.b64encode(response.content).decode("utf-8")
+                return {
+                    "status": "success", 
+                    "image_base64": f"data:image/jpeg;base64,{encoded_image}"
+                }
+            else:
+                logger.error(f"La cámara rechazó la captura. Código: {response.status_code}")
+                raise HTTPException(status_code=500, detail="La cámara rechazó la petición de captura.")
+                
+    except Exception as e:
+        logger.error(f"Error de red con el hardware: {str(e)}")
+        raise HTTPException(status_code=500, detail="No se pudo establecer conexión con la cámara Hikvision.")
