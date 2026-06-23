@@ -12,12 +12,15 @@ class Settings(BaseSettings):
     # --- Cámara Hikvision (enrolamiento por ISAPI). Vacío = aún no configurada ---
     HIKVISION_USER: str = "admin"
     HIKVISION_PASS: str = "Hikvision12"  # Reemplázalo por la clave real de tu equipo
+    HIKVISION_PASSWORD: str = "Hikvision12"
     HIKVISION_IP: str = "192.168.0.51"
     HIKVISION_HOST: str = ""          # Ej: "192.168.1.64" (sin http://)
     HIKVISION_PORT: int = 80
-    #HIKVISION_USER: str = ""
-    #HIKVISION_PASSWORD: str = ""
     HIKVISION_USE_HTTPS: bool = False
+
+    # --- Polling en vivo (detecciones en tiempo real cada N segundos) ---
+    LIVE_POLL_ENABLED: bool = True            # activa el polling rápido de la cámara
+    LIVE_POLL_INTERVAL_SECONDS: int = 10      # cada cuántos segundos consulta la cámara
 
     # --- Reconciliación automática (recupera marcaciones guardadas en la cámara) ---
     RECONCILE_ENABLED: bool = True            # job de fondo activado
@@ -29,12 +32,21 @@ class Settings(BaseSettings):
 
     @property
     def hikvision_configured(self) -> bool:
-        return bool(self.HIKVISION_HOST and self.HIKVISION_USER and self.HIKVISION_PASSWORD)
+        # Acepta HIKVISION_HOST o HIKVISION_IP indistintamente
+        host = self.HIKVISION_HOST or self.HIKVISION_IP
+        return bool(host and self.HIKVISION_USER and self.HIKVISION_PASSWORD)
+
+    @property
+    def hikvision_ip_configured(self) -> bool:
+        """True cuando la IP de la cámara está definida (suficiente para polling vía ISAPI)."""
+        return bool(self.HIKVISION_IP and self.HIKVISION_USER and self.HIKVISION_PASS)
 
     @property
     def hikvision_base_url(self) -> str:
         scheme = "https" if self.HIKVISION_USE_HTTPS else "http"
-        return f"{scheme}://{self.HIKVISION_HOST}:{self.HIKVISION_PORT}"
+        # Usa HIKVISION_HOST si está definido, si no cae en HIKVISION_IP
+        host = self.HIKVISION_HOST or self.HIKVISION_IP
+        return f"{scheme}://{host}:{self.HIKVISION_PORT}"
 
     class Config:
         env_file = ".env"
