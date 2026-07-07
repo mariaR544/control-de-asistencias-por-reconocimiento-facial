@@ -53,7 +53,9 @@
                 </div>
                 <div class="form-group">
                     <label for="filter-dept">Filtrar por Departamento</label>
-                    <input type="text" id="filter-dept" class="form-control" placeholder="Buscar por departamento...">
+                    <select id="filter-dept" class="form-control">
+                        <option value="">— Todos los departamentos —</option>
+                    </select>
                 </div>
                 <div class="form-group">
                     <label for="filter-shift">Filtrar por Turno</label>
@@ -159,7 +161,7 @@
 
             const filterName = document.getElementById("filter-name").value.toLowerCase().trim();
             const filterId = document.getElementById("filter-id").value.toLowerCase().trim();
-            const filterDept = document.getElementById("filter-dept").value.toLowerCase().trim();
+            const filterDept = document.getElementById("filter-dept").value.trim();   // exact value from select
             const filterShift = document.getElementById("filter-shift").value.toLowerCase().trim();
 
             if (filterName) params.push(`name=${encodeURIComponent(filterName)}`);
@@ -206,17 +208,33 @@
             }
         }
 
+        // Carga los departamentos únicos desde /api/employees al iniciar la página
+        async function loadDeptFilter() {
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/employees`);
+                const employees = await res.json();
+                const sel = document.getElementById("filter-dept");
+                const depts = new Set();
+                employees.forEach(emp => { if (emp.department) depts.add(emp.department.toUpperCase()); });
+                const sorted = [...depts].sort();
+                sel.innerHTML = `<option value="">— Todos los departamentos —</option>` +
+                    sorted.map(d => `<option value="${d}">${d}</option>`).join("");
+            } catch (e) {
+                console.error("No se pudieron cargar los departamentos:", e);
+            }
+        }
+
         function applyFilters() {
             const filterName = document.getElementById("filter-name").value.toLowerCase().trim();
             const filterId = document.getElementById("filter-id").value.toLowerCase().trim();
-            const filterDept = document.getElementById("filter-dept").value.toLowerCase().trim();
+            const filterDept = document.getElementById("filter-dept").value.trim();   // exact dept name from select
             const filterShift = document.getElementById("filter-shift").value.toLowerCase().trim();
 
             // 1. Resumen de horas
             const filteredSummary = summaryData.filter(s => {
                 const nameMatch = !filterName || s.name.toLowerCase().includes(filterName);
                 const idMatch = !filterId || s.person_id.toLowerCase().includes(filterId);
-                const deptMatch = !filterDept || s.department.toLowerCase().includes(filterDept);
+                const deptMatch = !filterDept || s.department.toUpperCase() === filterDept;
                 const shiftMatch = !filterShift || s.shift_name.toLowerCase().includes(filterShift);
                 return nameMatch && idMatch && deptMatch && shiftMatch;
             });
@@ -268,7 +286,7 @@
             const filteredLogs = logsData.filter(log => {
                 const nameMatch = !filterName || log.name.toLowerCase().includes(filterName);
                 const idMatch = !filterId || log.person_id.toLowerCase().includes(filterId);
-                const deptMatch = !filterDept || log.department.toLowerCase().includes(filterDept);
+                const deptMatch = !filterDept || log.department.toUpperCase() === filterDept;
                 const shiftMatch = !filterShift || (log.shift_name && log.shift_name.toLowerCase().includes(filterShift));
                 return nameMatch && idMatch && deptMatch && shiftMatch;
             });
@@ -312,10 +330,11 @@
         // Bind input events for live filtering
         document.getElementById("filter-name").addEventListener("input", applyFilters);
         document.getElementById("filter-id").addEventListener("input", applyFilters);
-        document.getElementById("filter-dept").addEventListener("input", applyFilters);
+        document.getElementById("filter-dept").addEventListener("change", applyFilters);
         document.getElementById("filter-shift").addEventListener("input", applyFilters);
 
         setDefaultDates();
+        loadDeptFilter();
         refresh();
     </script>
 </body>

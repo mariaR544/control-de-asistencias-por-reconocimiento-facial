@@ -117,13 +117,26 @@
                     <input type="text" id="filter-name" class="form-control" placeholder="Buscar por nombre...">
                 </div>
                 <div class="form-group">
+                    <label for="filter-lastname">Filtrar por Apellido</label>
+                    <input type="text" id="filter-lastname" class="form-control" placeholder="Buscar por apellido...">
+                </div>
+                <div class="form-group">
                     <label for="filter-id">Filtrar por ID</label>
                     <input type="text" id="filter-id" class="form-control" placeholder="Buscar por ID...">
                 </div>
+            </div>
+            <div class="filter-bar">
                 <div class="form-group">
                     <label for="filter-dept">Filtrar por Departamento</label>
                     <input type="text" id="filter-dept" class="form-control" placeholder="Buscar por departamento...">
                 </div>
+                <div class="form-group">
+                    <label for="filter-shift">Filtrar por Turno</label>
+                    <select id="filter-shift" class="form-control">
+                        <option value="">— Todos los turnos —</option>
+                    </select>
+                </div>
+                <div class="form-group"></div>
             </div>
             <div class="table-container">
                 <table>
@@ -171,9 +184,14 @@
             try {
                 const res = await fetch(`${BACKEND_URL}/api/shifts`);
                 shifts = await res.json();
+                // Selector del formulario de agregar/editar
                 const sel = document.getElementById("emp-shift");
                 sel.innerHTML = `<option value="">— Sin turno —</option>` +
                     shifts.map(s => `<option value="${s.id}">${s.name} (${s.standard_hours}h)</option>`).join("");
+                // Selector del filtro
+                const filterSel = document.getElementById("filter-shift");
+                filterSel.innerHTML = `<option value="">— Todos los turnos —</option>` +
+                    shifts.map(s => `<option value="${s.id}">${s.name}</option>`).join("");
             } catch (e) { console.error(e); }
         }
 
@@ -224,14 +242,19 @@
 
         function filterEmployees() {
             const filterName = document.getElementById("filter-name").value.toLowerCase().trim();
+            const filterLastname = document.getElementById("filter-lastname").value.toLowerCase().trim();
             const filterId = document.getElementById("filter-id").value.toLowerCase().trim();
             const filterDept = document.getElementById("filter-dept").value.toLowerCase().trim();
+            const filterShift = document.getElementById("filter-shift").value;
 
             const filtered = employees.filter(emp => {
                 const nameMatch = !filterName || emp.name.toLowerCase().includes(filterName);
+                // El apellido se busca dentro del nombre completo (que suele tener apellidos)
+                const lastnameMatch = !filterLastname || emp.name.toLowerCase().includes(filterLastname);
                 const idMatch = !filterId || emp.id.toLowerCase().includes(filterId);
                 const deptMatch = !filterDept || emp.department.toLowerCase().includes(filterDept);
-                return nameMatch && idMatch && deptMatch;
+                const shiftMatch = !filterShift || (emp.shift_id != null && String(emp.shift_id) === filterShift);
+                return nameMatch && lastnameMatch && idMatch && deptMatch && shiftMatch;
             });
 
             displayEmployees(filtered);
@@ -348,8 +371,10 @@
         }
 
         document.getElementById("filter-name").addEventListener("input", filterEmployees);
+        document.getElementById("filter-lastname").addEventListener("input", filterEmployees);
         document.getElementById("filter-id").addEventListener("input", filterEmployees);
         document.getElementById("filter-dept").addEventListener("input", filterEmployees);
+        document.getElementById("filter-shift").addEventListener("change", filterEmployees);
 
         // Inicializar
         (async () => { await loadShifts(); await loadEmployees(); })();
