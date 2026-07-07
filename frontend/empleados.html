@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
@@ -7,22 +8,44 @@
     <link rel="stylesheet" href="css/style.css">
     <style>
         .emp-photo {
-            width: 44px; height: 44px; border-radius: 50%;
-            object-fit: cover; border: 2px solid var(--border); background: rgba(0,0,0,0.2);
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border);
+            background: rgba(0, 0, 0, 0.2);
         }
+
         .emp-photo-placeholder {
-            width: 44px; height: 44px; border-radius: 50%;
-            display: flex; align-items: center; justify-content: center;
-            background: rgba(76,175,80,0.1); border: 2px dashed var(--primary);
-            color: var(--primary); font-size: 1.2rem;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(76, 175, 80, 0.1);
+            border: 2px dashed var(--primary);
+            color: var(--primary);
+            font-size: 1.2rem;
         }
+
         .photo-preview {
-            width: 90px; height: 90px; border-radius: 12px; object-fit: cover;
-            border: 1px solid var(--border); margin-top: 0.5rem;
+            width: 90px;
+            height: 90px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 1px solid var(--border);
+            margin-top: 0.5rem;
         }
-        .row-actions { display: flex; gap: 0.4rem; flex-wrap: wrap; }
+
+        .row-actions {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
+
 <body>
     <header>
         <div class="nav-container">
@@ -40,7 +63,8 @@
     </header>
     <main>
         <h1 class="page-title">Gestión de Empleados</h1>
-        <p class="page-subtitle">Agrega, edita y elimina empleados. Sube la foto del rostro y sincronízala con la cámara facial (cuando esté conectada) para el enrolamiento.</p>
+        <p class="page-subtitle">Agrega, edita y elimina empleados. Sube la foto del rostro y sincronízala con la cámara
+            facial (cuando esté conectada) para el enrolamiento.</p>
 
         <div class="card mb-4">
             <h2 class="mb-4" id="form-title">Agregar empleado</h2>
@@ -56,13 +80,16 @@
                     </div>
                     <div class="form-group">
                         <label>Departamento</label>
-                        <input type="text" id="emp-dept" class="form-control" placeholder="Ej: GUAYAMURI/DOCENTE" required>
+                        <input type="text" id="emp-dept" class="form-control" placeholder="Ej: GUAYAMURI/DOCENTE"
+                            required>
                     </div>
                 </div>
                 <div class="filter-bar">
                     <div class="form-group">
                         <label>Turno</label>
-                        <select id="emp-shift" class="form-control"><option value="">— Sin turno —</option></select>
+                        <select id="emp-shift" class="form-control">
+                            <option value="">— Sin turno —</option>
+                        </select>
                     </div>
                     <div class="form-group">
                         <label>N° de tarjeta (opcional)</label>
@@ -76,13 +103,28 @@
                 </div>
                 <div style="display:flex; gap:0.5rem; margin-top:0.5rem;">
                     <button type="submit" class="btn" id="submit-btn">Guardar empleado</button>
-                    <button type="button" class="btn btn-secondary" id="cancel-btn" style="display:none;">Cancelar</button>
+                    <button type="button" class="btn btn-secondary" id="cancel-btn"
+                        style="display:none;">Cancelar</button>
                 </div>
             </form>
         </div>
 
         <div class="card">
             <h2 class="mb-4">Empleados registrados</h2>
+            <div class="filter-bar">
+                <div class="form-group">
+                    <label for="filter-name">Filtrar por Nombre</label>
+                    <input type="text" id="filter-name" class="form-control" placeholder="Buscar por nombre...">
+                </div>
+                <div class="form-group">
+                    <label for="filter-id">Filtrar por ID</label>
+                    <input type="text" id="filter-id" class="form-control" placeholder="Buscar por ID...">
+                </div>
+                <div class="form-group">
+                    <label for="filter-dept">Filtrar por Departamento</label>
+                    <input type="text" id="filter-dept" class="form-control" placeholder="Buscar por departamento...">
+                </div>
+            </div>
             <div class="table-container">
                 <table>
                     <thead>
@@ -137,46 +179,62 @@
 
         async function loadEmployees() {
             const tbody = document.getElementById("emp-tbody");
-            // Se cambió colspan a 7
             tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/employees`);
                 employees = await res.json();
-                tbody.innerHTML = "";
-                if (employees.length === 0) {
-                    // Se cambió colspan a 7
-                    tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay empleados registrados.</td></tr>`;
-                    return;
-                }
-                employees.forEach(emp => {
-                    const tr = document.createElement("tr");
-                    const photoCell = emp.has_photo
-                        ? `<img class="emp-photo" src="${BACKEND_URL}/api/employees/${emp.id}/photo?t=${Date.now()}" alt="">`
-                        : `<div class="emp-photo-placeholder">👤</div>`;
-                    const shiftName = emp.shift ? `${emp.shift.name}` : "—";
-                    
-                    // SE ELIMINÓ LA CELDA DE TARJETA EN ESTE INNERHTML
-                    tr.innerHTML = `
-                        <td>${photoCell}</td>
-                        <td class="person-id-cell">'${emp.id}</td>
-                        <td>${emp.name.toUpperCase()}</td>
-                        <td>${emp.department.toUpperCase()}</td>
-                        <td>${shiftName}</td>
-                        <td>${cameraBadge(emp.camera_status)}</td>
-                        <td class="row-actions">
-                            <button class="btn btn-secondary btn-sm" data-edit="${emp.id}">✏️ Editar</button>
-                            <button class="btn btn-sm" data-sync="${emp.id}" ${emp.has_photo ? "" : "disabled title='Sube una foto primero'"}>📷 Cámara</button>
-                            <button class="btn btn-danger btn-sm" data-del="${emp.id}">🗑️</button>
-                        </td>`;
-                    tbody.appendChild(tr);
-                });
-                tbody.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => startEdit(b.dataset.edit)));
-                tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => deleteEmployee(b.dataset.del)));
-                tbody.querySelectorAll("[data-sync]").forEach(b => b.addEventListener("click", () => syncCamera(b.dataset.sync)));
+                filterEmployees();
             } catch (e) {
-                // Se cambió colspan a 7
                 tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
             }
+        }
+
+        function displayEmployees(list) {
+            const tbody = document.getElementById("emp-tbody");
+            tbody.innerHTML = "";
+            if (list.length === 0) {
+                tbody.innerHTML = `<tr><td colspan="7" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay empleados registrados que coincidan con la búsqueda.</td></tr>`;
+                return;
+            }
+            list.forEach(emp => {
+                const tr = document.createElement("tr");
+                const photoCell = emp.has_photo
+                    ? `<img class="emp-photo" src="${BACKEND_URL}/api/employees/${emp.id}/photo?t=${Date.now()}" alt="">`
+                    : `<div class="emp-photo-placeholder">👤</div>`;
+                const shiftName = emp.shift ? `${emp.shift.name}` : "—";
+
+                tr.innerHTML = `
+                    <td>${photoCell}</td>
+                    <td class="person-id-cell">'${emp.id}</td>
+                    <td>${emp.name.toUpperCase()}</td>
+                    <td>${emp.department.toUpperCase()}</td>
+                    <td>${shiftName}</td>
+                    <td>${cameraBadge(emp.camera_status)}</td>
+                    <td class="row-actions">
+                        <button class="btn btn-secondary btn-sm" data-edit="${emp.id}">✏️ Editar</button>
+                        <button class="btn btn-sm" data-sync="${emp.id}" ${emp.has_photo ? "" : "disabled title='Sube una foto primero'"}>📷 Cámara</button>
+                        <button class="btn btn-danger btn-sm" data-del="${emp.id}">🗑️</button>
+                    </td>`;
+                tbody.appendChild(tr);
+            });
+            tbody.querySelectorAll("[data-edit]").forEach(b => b.addEventListener("click", () => startEdit(b.dataset.edit)));
+            tbody.querySelectorAll("[data-del]").forEach(b => b.addEventListener("click", () => deleteEmployee(b.dataset.del)));
+            tbody.querySelectorAll("[data-sync]").forEach(b => b.addEventListener("click", () => syncCamera(b.dataset.sync)));
+        }
+
+        function filterEmployees() {
+            const filterName = document.getElementById("filter-name").value.toLowerCase().trim();
+            const filterId = document.getElementById("filter-id").value.toLowerCase().trim();
+            const filterDept = document.getElementById("filter-dept").value.toLowerCase().trim();
+
+            const filtered = employees.filter(emp => {
+                const nameMatch = !filterName || emp.name.toLowerCase().includes(filterName);
+                const idMatch = !filterId || emp.id.toLowerCase().includes(filterId);
+                const deptMatch = !filterDept || emp.department.toLowerCase().includes(filterDept);
+                return nameMatch && idMatch && deptMatch;
+            });
+
+            displayEmployees(filtered);
         }
 
         // Vista previa de la foto seleccionada
@@ -247,13 +305,15 @@
                 let empId;
                 if (editingId) {
                     const res = await fetch(`${BACKEND_URL}/api/employees/${editingId}`, {
-                        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                        method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+                    });
                     if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al actualizar.", false); return; }
                     empId = editingId;
                 } else {
                     body.id = document.getElementById("emp-id").value.trim();
                     const res = await fetch(`${BACKEND_URL}/api/employees`, {
-                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) });
+                        method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
+                    });
                     if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al crear empleado.", false); return; }
                     empId = body.id;
                 }
@@ -287,8 +347,13 @@
             } catch (e) { showToast("Error de red.", false); }
         }
 
+        document.getElementById("filter-name").addEventListener("input", filterEmployees);
+        document.getElementById("filter-id").addEventListener("input", filterEmployees);
+        document.getElementById("filter-dept").addEventListener("input", filterEmployees);
+
         // Inicializar
         (async () => { await loadShifts(); await loadEmployees(); })();
     </script>
 </body>
+
 </html>

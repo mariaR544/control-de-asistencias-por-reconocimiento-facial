@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Monitoreo en Tiempo Real - Colegio Guayamuri</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <header>
         <div class="nav-container">
@@ -27,6 +29,10 @@
         <div class="status-bar">
             <div id="connection-dot" class="status-dot"></div>
             <span id="connection-text">Conectando al servidor de asistencia...</span>
+            <div>
+                <div id="camera-dot" class="status-dot" style="background-color: #ff4d4d;"></div>
+                <span id="camera-text">Verificando estado de la cámara...</span>
+            </div>
         </div>
         <h1 class="page-title">Monitoreo de Asistencia</h1>
         <p class="page-subtitle">Visualización en tiempo real para las computadoras de control.</p>
@@ -97,6 +103,8 @@
     <script>
         const BACKEND_URL = "http://localhost:8000";
         const WS_URL = "ws://localhost:8000/ws/attendance";
+        const cameraDot = document.getElementById("camera-dot");
+        const cameraText = document.getElementById("camera-text");
         const connectionDot = document.getElementById("connection-dot");
         const connectionText = document.getElementById("connection-text");
         const entradaTbody = document.getElementById("entrada-tbody");
@@ -117,13 +125,13 @@
         function playBeep() {
             try {
                 const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-                
+
                 // Oscilador para el tono
                 const oscillator = audioCtx.createOscillator();
                 const gainNode = audioCtx.createGain();
                 oscillator.type = 'sine';
                 oscillator.frequency.setValueAtTime(880, audioCtx.currentTime); // Tono A5 (880Hz)
-                
+
                 // Efecto de atenuación rápida (fade out)
                 gainNode.gain.setValueAtTime(0.15, audioCtx.currentTime);
                 gainNode.gain.exponentialRampToValueAtTime(0.001, audioCtx.currentTime + 0.15);
@@ -203,24 +211,42 @@
         }
         // Agregar fila a la columna correspondiente según el tipo de marcación
         function addAttendanceToTable(log, animate = true) {
+            // Asegurar que el tipo de evento esté en minúsculas para evaluar correctamente
             const isSalida = (log.event_type || "entrada").toLowerCase() === "salida";
             const tbody = isSalida ? salidaTbody : entradaTbody;
 
-            // Quitar el mensaje de vacío de esa columna si existe
-            const placeholder = tbody.querySelector("tr:not([data-log])");
-            if (placeholder) placeholder.remove();
+            if (!tbody) {
+                console.error("Error: No se encontró el contenedor de la tabla para:", log.event_type);
+                return;
+            }
 
+            // MANEJO SEGURO DEL PLACEHOLDER: Borra el mensaje de vacío por clase o por atributo
+            const placeholder = tbody.querySelector(".no-records") || tbody.querySelector("tr:not([data-log])");
+            if (placeholder) {
+                placeholder.remove();
+            }
+
+            // Crear la nueva fila
             const tr = document.createElement("tr");
-            tr.setAttribute("data-log", log.id ?? "");
+            tr.setAttribute("data-log", log.log_id || log.id || "");
+
             if (animate) {
                 tr.className = "new-row";
             }
+
+            // Obtener variables seguras por si algún campo viene vacío de la cámara
+            const personaId = log.person_id || log.employee_id || "---";
+            const nombreEmpleado = log.name || log.employee_name || `Usuario ${personaId}`;
+            const horaMarcacion = log.time_formatted || log.timestamp || "---";
+
+            // Insertar las celdas manteniendo tu estructura limpia original
             tr.innerHTML = `
-                <td class="person-id-cell">'${log.person_id}</td>
-                <td>${log.name.toUpperCase()}</td>
-                <td>${log.time_formatted}</td>
+                <td class="person-id-cell">${personaId}</td>
+                <td>${nombreEmpleado.toUpperCase()}</td>
+                <td>${horaMarcacion}</td>
             `;
-            // Agregar al inicio (más reciente arriba)
+
+            // Agregar al inicio de la tabla (el más reciente arriba)
             if (tbody.firstChild) {
                 tbody.insertBefore(tr, tbody.firstChild);
             } else {
@@ -230,16 +256,16 @@
         // Inicializar conexión WebSocket
         function connectWebSocket() {
             socket = new WebSocket(WS_URL);
-            socket.onopen = function() {
+            socket.onopen = function () {
                 console.log("WebSocket conectado al backend.");
                 connectionDot.className = "status-dot connected";
                 connectionText.innerText = "Conectado al servidor de asistencia. Monitoreando en vivo...";
                 fetchRecentAttendance();
             };
-            socket.onmessage = function(event) {
+            socket.onmessage = function (event) {
                 const log = JSON.parse(event.data);
                 console.log("Nueva asistencia recibida por WS:", log);
-                
+
                 // Actualizar UI
                 addAttendanceToTable(log, true);
                 updateColumnsState();
@@ -247,19 +273,48 @@
                 showToast(log.name, log.department);
                 playBeep();
             };
-            socket.onclose = function() {
+            socket.onclose = function () {
                 console.log("WebSocket desconectado. Intentando reconectar en 3 segundos...");
                 connectionDot.className = "status-dot";
                 connectionText.innerText = "Conexión perdida. Reconectando...";
                 setTimeout(connectWebSocket, 3000);
             };
-            socket.onerror = function(err) {
+            socket.onerror = function (err) {
                 console.error("Error en WebSocket:", err);
                 socket.close();
             };
         }
         // Inicialización
         connectWebSocket();
+
+
+        // Función para chequear el estado real del hardware Hikvision
+        async function checkCameraHardwareStatus() {
+            try {
+                const response = await fetch(`http://${window.location.hostname}:8000/api/hikvision/status`);
+                const data = await response.json();
+
+                if (data.camera_online) {
+                    cameraDot.style.backgroundColor = "#2ecc71"; // Verde encendido
+                    cameraText.innerText = "Cámara Hikvision: EN LÍNEA";
+                } else {
+                    cameraDot.style.backgroundColor = "#ff4d4d"; // Rojo apagado
+                    cameraText.innerText = "Cámara Hikvision: DESCONECTADA / ERROR";
+                }
+            } catch (err) {
+                console.error("Error al consultar el estado de la cámara:", err);
+                cameraDot.style.backgroundColor = "#ff4d4d";
+                cameraText.innerText = "Cámara Hikvision: SIN COMUNICACIÓN CON EL BACKEND";
+            }
+        }
+
+        // Ejecutar la comprobación inmediatamente al cargar la página
+        checkCameraHardwareStatus();
+
+        // Re-comprobar el estado automáticamente cada 10 segundos
+        setInterval(checkCameraHardwareStatus, 10000);
+
     </script>
 </body>
+
 </html>

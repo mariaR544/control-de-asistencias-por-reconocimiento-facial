@@ -57,5 +57,6 @@ class AttendanceLog(Base):
     timestamp = Column(DateTime, nullable=False, default=func.now())
     # "entrada" | "salida" — determinado por alternancia diaria al momento de marcar.
     event_type = Column(String(10), nullable=False, default="entrada")
+    captured_photo_url = Column(String(255), nullable=True)
 
     employee = relationship("Employee", back_populates="attendances")

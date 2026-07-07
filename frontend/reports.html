@@ -1,11 +1,13 @@
 <!DOCTYPE html>
 <html lang="es">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Reportes de Asistencia - Colegio Guayamuri</title>
     <link rel="stylesheet" href="css/style.css">
 </head>
+
 <body>
     <header>
         <div class="nav-container">
@@ -25,7 +27,8 @@
     </header>
     <main>
         <h1 class="page-title">Reportes y Exportación</h1>
-        <p class="page-subtitle">Filtra por rango de fechas para ver horas trabajadas, horas extra y la bitácora de marcaciones. Descarga el reporte completo en Excel.</p>
+        <p class="page-subtitle">Filtra por rango de fechas para ver horas trabajadas, horas extra y la bitácora de
+            marcaciones. Descarga el reporte completo en Excel.</p>
 
         <div class="card mb-4">
             <div class="filter-bar">
@@ -37,8 +40,27 @@
                     <label for="end-date">Fecha de Fin</label>
                     <input type="date" id="end-date" class="form-control">
                 </div>
-                
-                <div style="display: flex; gap: 0.5rem;">
+            </div>
+
+            <div class="filter-bar mt-4" style="margin-bottom: 0;">
+                <div class="form-group">
+                    <label for="filter-name">Filtrar por Nombre</label>
+                    <input type="text" id="filter-name" class="form-control" placeholder="Buscar por nombre...">
+                </div>
+                <div class="form-group">
+                    <label for="filter-id">Filtrar por ID</label>
+                    <input type="text" id="filter-id" class="form-control" placeholder="Buscar por ID...">
+                </div>
+                <div class="form-group">
+                    <label for="filter-dept">Filtrar por Departamento</label>
+                    <input type="text" id="filter-dept" class="form-control" placeholder="Buscar por departamento...">
+                </div>
+                <div class="form-group">
+                    <label for="filter-shift">Filtrar por Turno</label>
+                    <input type="text" id="filter-shift" class="form-control" placeholder="Buscar por turno...">
+                </div>
+
+                <div style="display: flex; gap: 0.5rem; margin-bottom: 0;">
                     <button class="btn btn-secondary" id="filter-btn">🔍 Filtrar</button>
                     <button class="btn" id="export-btn">📊 Exportar a Excel</button>
                 </div>
@@ -54,7 +76,8 @@
 
         <div class="card" id="tab-resumen">
             <h2 class="mb-4">Horas trabajadas por empleado y día</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="summary-count">Cargando...</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="summary-count">
+                Cargando...</p>
             <div class="table-container">
                 <table>
                     <thead>
@@ -78,7 +101,8 @@
 
         <div class="card" id="tab-marcaciones" style="display:none;">
             <h2 class="mb-4">Bitácora de marcaciones</h2>
-            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="logs-count">Cargando...</p>
+            <p style="color: var(--text-muted); font-size: 0.85rem; margin-bottom: 1.5rem;" id="logs-count">Cargando...
+            </p>
             <div class="table-container">
                 <table>
                     <thead>
@@ -95,12 +119,15 @@
             </div>
         </div>
     </main>
-<script>
+    <script>
         const BACKEND_URL = "http://localhost:8000";
         const startDateInput = document.getElementById("start-date");
         const endDateInput = document.getElementById("end-date");
         const summaryTbody = document.getElementById("summary-tbody");
         const reportsTbody = document.getElementById("reports-tbody");
+
+        let summaryData = [];
+        let logsData = [];
 
         // --- MODIFICADO: Ahora calcula automáticamente la quincena actual ---
         function setDefaultDates() {
@@ -129,6 +156,17 @@
             const params = [];
             if (startDateInput.value) params.push(`start_date=${startDateInput.value}`);
             if (endDateInput.value) params.push(`end_date=${endDateInput.value}`);
+
+            const filterName = document.getElementById("filter-name").value.toLowerCase().trim();
+            const filterId = document.getElementById("filter-id").value.toLowerCase().trim();
+            const filterDept = document.getElementById("filter-dept").value.toLowerCase().trim();
+            const filterShift = document.getElementById("filter-shift").value.toLowerCase().trim();
+
+            if (filterName) params.push(`name=${encodeURIComponent(filterName)}`);
+            if (filterId) params.push(`person_id=${encodeURIComponent(filterId)}`);
+            if (filterDept) params.push(`department=${encodeURIComponent(filterDept)}`);
+            if (filterShift) params.push(`shift=${encodeURIComponent(filterShift)}`);
+
             return params.length ? "?" + params.join("&") : "";
         }
 
@@ -148,26 +186,62 @@
             summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
             try {
                 const res = await fetch(`${BACKEND_URL}/api/attendance/summary${buildQuery()}`);
-                const data = await res.json();
+                summaryData = await res.json();
+                applyFilters();
+            } catch (e) {
+                console.error(e);
+                summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor. ¿Está corriendo el backend?</td></tr>`;
+            }
+        }
 
-                let totalWorked = 0, totalOT = 0, incompletos = 0;
-                data.forEach(s => { totalWorked += s.worked_hours; totalOT += s.overtime_hours; if (s.incomplete) incompletos++; });
+        // ---------- Marcaciones ----------
+        async function fetchLogs() {
+            reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
+            try {
+                const res = await fetch(`${BACKEND_URL}/api/attendance${buildQuery()}`);
+                logsData = await res.json();
+                applyFilters();
+            } catch (e) {
+                reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
+            }
+        }
 
-                const totalEmpleados = new Set(data.map(s => s.person_id)).size;
+        function applyFilters() {
+            const filterName = document.getElementById("filter-name").value.toLowerCase().trim();
+            const filterId = document.getElementById("filter-id").value.toLowerCase().trim();
+            const filterDept = document.getElementById("filter-dept").value.toLowerCase().trim();
+            const filterShift = document.getElementById("filter-shift").value.toLowerCase().trim();
 
-                document.getElementById("stats-grid").innerHTML = `
-                    <div class="stat-card"><div class="stat-value">${totalEmpleados}</div><div class="stat-label">Empleados registrados</div></div>
-                    <div class="stat-card"><div class="stat-value">${totalWorked.toFixed(2)} h</div><div class="stat-label">Horas trabajadas</div></div>
-                    <div class="stat-card"><div class="stat-value">${totalOT.toFixed(2)} h</div><div class="stat-label">Horas extra</div></div>
-                    <div class="stat-card"><div class="stat-value">${incompletos}</div><div class="stat-label">Días incompletos</div></div>`;
+            // 1. Resumen de horas
+            const filteredSummary = summaryData.filter(s => {
+                const nameMatch = !filterName || s.name.toLowerCase().includes(filterName);
+                const idMatch = !filterId || s.person_id.toLowerCase().includes(filterId);
+                const deptMatch = !filterDept || s.department.toLowerCase().includes(filterDept);
+                const shiftMatch = !filterShift || s.shift_name.toLowerCase().includes(filterShift);
+                return nameMatch && idMatch && deptMatch && shiftMatch;
+            });
 
-                document.getElementById("summary-count").innerText = `${data.length} registros (empleado/día) en el rango seleccionado.`;
-                summaryTbody.innerHTML = "";
-                if (data.length === 0) {
-                    summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay datos en estas fechas.</td></tr>`;
-                    return;
-                }
-                data.forEach(s => {
+            let totalWorked = 0, totalOT = 0, incompletos = 0;
+            filteredSummary.forEach(s => {
+                totalWorked += s.worked_hours;
+                totalOT += s.overtime_hours;
+                if (s.incomplete) incompletos++;
+            });
+            const totalEmpleados = new Set(filteredSummary.map(s => s.person_id)).size;
+
+            document.getElementById("stats-grid").innerHTML = `
+                <div class="stat-card"><div class="stat-value">${totalEmpleados}</div><div class="stat-label">Empleados registrados</div></div>
+                <div class="stat-card"><div class="stat-value">${totalWorked.toFixed(2)} h</div><div class="stat-label">Horas trabajadas</div></div>
+                <div class="stat-card"><div class="stat-value">${totalOT.toFixed(2)} h</div><div class="stat-label">Horas extra</div></div>
+                <div class="stat-card"><div class="stat-value">${incompletos}</div><div class="stat-label">Días incompletos</div></div>`;
+
+            document.getElementById("summary-count").innerText = `${filteredSummary.length} registros (empleado/día) mostrados (filtrados de ${summaryData.length} totales).`;
+
+            summaryTbody.innerHTML = "";
+            if (filteredSummary.length === 0) {
+                summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:var(--text-muted); padding:2rem;">No hay registros que coincidan con la búsqueda.</td></tr>`;
+            } else {
+                filteredSummary.forEach(s => {
                     const tr = document.createElement("tr");
                     const estado = s.incomplete
                         ? `<span class="badge-incomplete">Incompleto</span>`
@@ -188,25 +262,23 @@
                         <td>${estado}</td>`;
                     summaryTbody.appendChild(tr);
                 });
-            } catch (e) {
-                console.error(e);
-                summaryTbody.innerHTML = `<tr><td colspan="10" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor. ¿Está corriendo el backend?</td></tr>`;
             }
-        }
 
-        // ---------- Marcaciones ----------
-        async function fetchLogs() {
-            reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">Cargando...</td></tr>`;
-            try {
-                const res = await fetch(`${BACKEND_URL}/api/attendance${buildQuery()}`);
-                let logs = await res.json();
-                document.getElementById("logs-count").innerText = `${logs.length} marcaciones en el rango seleccionado.`;
-                reportsTbody.innerHTML = "";
-                if (logs.length === 0) {
-                    reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">No se encontraron marcaciones.</td></tr>`;
-                    return;
-                }
-                logs.reverse().forEach(log => {
+            // 2. Marcaciones
+            const filteredLogs = logsData.filter(log => {
+                const nameMatch = !filterName || log.name.toLowerCase().includes(filterName);
+                const idMatch = !filterId || log.person_id.toLowerCase().includes(filterId);
+                const deptMatch = !filterDept || log.department.toLowerCase().includes(filterDept);
+                const shiftMatch = !filterShift || (log.shift_name && log.shift_name.toLowerCase().includes(filterShift));
+                return nameMatch && idMatch && deptMatch && shiftMatch;
+            });
+
+            document.getElementById("logs-count").innerText = `${filteredLogs.length} marcaciones mostradas (filtradas de ${logsData.length} totales).`;
+            reportsTbody.innerHTML = "";
+            if (filteredLogs.length === 0) {
+                reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:var(--text-muted); padding:2rem;">No se encontraron marcaciones.</td></tr>`;
+            } else {
+                filteredLogs.forEach(log => {
                     const tr = document.createElement("tr");
                     tr.innerHTML = `
                         <td class="person-id-cell">'${log.person_id}</td>
@@ -216,8 +288,6 @@
                         <td>${log.time_formatted}</td>`;
                     reportsTbody.appendChild(tr);
                 });
-            } catch (e) {
-                reportsTbody.innerHTML = `<tr><td colspan="5" class="text-center" style="color:#ef4444; padding:2rem;">Error al conectar con el servidor.</td></tr>`;
             }
         }
 
@@ -239,8 +309,15 @@
         });
         document.getElementById("filter-btn").addEventListener("click", refresh);
 
+        // Bind input events for live filtering
+        document.getElementById("filter-name").addEventListener("input", applyFilters);
+        document.getElementById("filter-id").addEventListener("input", applyFilters);
+        document.getElementById("filter-dept").addEventListener("input", applyFilters);
+        document.getElementById("filter-shift").addEventListener("input", applyFilters);
+
         setDefaultDates();
         refresh();
     </script>
 </body>
+
 </html>
