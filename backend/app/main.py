@@ -24,7 +24,7 @@ import json
 
 
 from fastapi.staticfiles import StaticFiles
-from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, Query, UploadFile, File, Request
+from fastapi import FastAPI, Depends, WebSocket, WebSocketDisconnect, HTTPException, Query, UploadFile, File, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import Response, FileResponse
 from fastapi import Request
@@ -539,6 +539,142 @@ def create_employee(payload: EmployeeCreate, db: Session = Depends(get_db)):
         db.rollback()
         logger.error(f"Error crítico en el guardado de personal: {str(e)}")
         raise HTTPException(status_code=500, detail="Error interno al procesar el registro.")
+@app.post("/api/employees/register-with-face", status_code=201)
+async def register_employee_with_face(
+    employee_id: str = Form(...),
+    name: str = Form(...),
+    department: str = Form(...),
+    shift_id: Optional[str] = Form(None),
+    card_number: Optional[str] = Form(None),
+    file: Optional[UploadFile] = File(None),
+    db: Session = Depends(get_db),
+):
+    """
+    Registro unificado: guarda el empleado en la BD local, almacena su foto
+    en disco y lo enrola automáticamente en el biométrico Hikvision en un solo paso.
+    Devuelve el resultado de cada etapa para que el frontend muestre el progreso.
+    """
+    logger.info(f"[REGISTRO UNIFICADO] Iniciando para {name} (ID: {employee_id})")
+
+    # ── PASO 1: Verificar duplicado ──────────────────────────────────────────
+    if db.query(Employee).filter(Employee.id == employee_id).first():
+        raise HTTPException(status_code=400, detail="El ID de empleado ya está registrado.")
+
+    shift_id_int = int(shift_id) if shift_id and shift_id.strip() else None
+    if shift_id_int is not None:
+        if not db.query(Shift).filter(Shift.id == shift_id_int).first():
+            raise HTTPException(status_code=400, detail="El turno indicado no existe.")
+
+    # ── PASO 2: Guardar foto en disco (si viene) ─────────────────────────────
+    photo_path_saved = None
+    photo_bytes_saved = None
+
+    if file and file.filename:
+        content_type = file.content_type or "image/jpeg"
+        if content_type not in ALLOWED_IMAGE_TYPES:
+            raise HTTPException(status_code=400, detail="La foto debe ser JPG o PNG.")
+        photo_bytes_saved = await file.read()
+        if len(photo_bytes_saved) > MAX_PHOTO_BYTES:
+            raise HTTPException(status_code=400, detail="La foto supera 5 MB.")
+        photo_path_saved = _photo_file_path(employee_id)
+        os.makedirs(settings.MEDIA_DIR, exist_ok=True)
+        with open(photo_path_saved, "wb") as fout:
+            fout.write(photo_bytes_saved)
+        logger.info(f"[REGISTRO UNIFICADO] Foto guardada en disco: {photo_path_saved}")
+
+    # ── PASO 3: Crear el empleado en la BD local ─────────────────────────────
+    try:
+        emp = Employee(
+            id=employee_id,
+            name=name,
+            department=department,
+            shift_id=shift_id_int,
+            card_number=card_number.strip() if card_number and card_number.strip() else None,
+            photo_path=photo_path_saved,
+            camera_status="pendiente",
+        )
+        db.add(emp)
+        db.commit()
+        db.refresh(emp)
+        logger.info(f"[REGISTRO UNIFICADO] Empleado {employee_id} guardado en BD local.")
+    except Exception as db_err:
+        db.rollback()
+        # Limpiar foto si ya se guardó
+        if photo_path_saved and os.path.exists(photo_path_saved):
+            try:
+                os.remove(photo_path_saved)
+            except OSError:
+                pass
+        logger.error(f"[REGISTRO UNIFICADO] Error en BD: {db_err}")
+        raise HTTPException(status_code=500, detail=f"Error al guardar en base de datos: {str(db_err)}")
+
+    # ── PASO 4: Enrolamiento en el biométrico Hikvision ──────────────────────
+    camera_result = {
+        "ok": False,
+        "status": "sin_foto",
+        "message": "No se subió foto; el empleado quedó guardado localmente.",
+    }
+
+    if photo_bytes_saved:
+        try:
+            hik_message = enroll_employee(emp, photo_bytes_saved)
+            emp.camera_status = "sincronizado"
+            emp.camera_synced_at = datetime.now()
+            db.commit()
+            camera_result = {
+                "ok": True,
+                "status": "sincronizado",
+                "message": hik_message,
+            }
+            logger.info(f"[REGISTRO UNIFICADO] {employee_id} enrolado en Hikvision correctamente.")
+        except CameraNotConfigured as e:
+            camera_result = {
+                "ok": False,
+                "status": "pendiente",
+                "message": str(e),
+                "reason": "no_configurada",
+            }
+            logger.warning(f"[REGISTRO UNIFICADO] Cámara no configurada: {e}")
+        except CameraEnrollmentError as e:
+            emp.camera_status = "error"
+            db.commit()
+            camera_result = {
+                "ok": False,
+                "status": "error",
+                "message": str(e),
+            }
+            logger.error(f"[REGISTRO UNIFICADO] Error al enrolar en Hikvision: {e}")
+
+    return {
+        "employee_id": employee_id,
+        "name": name,
+        "db_saved": True,
+        "photo_saved": photo_path_saved is not None,
+        "camera": camera_result,
+        "message": (
+            f"Empleado registrado. "
+            f"{'Foto subida. ' if photo_path_saved else ''}"
+            f"{camera_result['message']}"
+        ),
+    }
+
+
+@app.put("/api/employees/{employee_id}", response_model=EmployeeOut)
+def update_employee(employee_id: str, payload: EmployeeUpdate, db: Session = Depends(get_db)):
+    emp = db.query(Employee).filter(Employee.id == employee_id).first()
+    if not emp:
+        raise HTTPException(status_code=404, detail="Empleado no encontrado.")
+    if payload.shift_id is not None:
+        if not db.query(Shift).filter(Shift.id == payload.shift_id).first():
+            raise HTTPException(status_code=400, detail="El turno indicado no existe.")
+    data = payload.model_dump(exclude_unset=True)
+    for k, v in data.items():
+        setattr(emp, k, v)
+    db.commit()
+    db.refresh(emp)
+    return emp
+
+
 @app.delete("/api/employees/{employee_id}")
 def delete_employee(employee_id: str, db: Session = Depends(get_db)):
     emp = db.query(Employee).filter(Employee.id == employee_id).first()
@@ -901,3 +1037,39 @@ async def capture_live_hardware_multi_route(request: Request):
     except Exception as e:
         logger.error(f"Error de comunicación física con el hardware biométrico: {str(e)}")
         raise HTTPException(status_code=500, detail="No se pudo establecer conexión con la cámara Hikvision.")
+    
+    # =====================================================================
+#         MÓDULO DE AUTENTICACIÓN (LOGIN) PARA EL COLEGIO GUAYAMURI
+# =====================================================================
+
+class LoginRequest(BaseModel):
+        username: str
+        password: str
+
+@app.post("/api/auth/login")
+def login_usuario(payload: LoginRequest):
+        """
+        Endpoint para autenticar a los usuarios del sistema de asistencia.
+        Envía las credenciales y genera los datos que el login.html necesita.
+        """
+        logger.info(f"Intento de inicio de sesión para el usuario: {payload.username}")
+        
+        # NOTA: Aquí puedes definir las credenciales de administrador para tu sistema.
+        # Puedes cambiarlas por el usuario y contraseña que prefieras usar.
+        USUARIO_CORRECTO = "admin"
+        CONTRASENA_CORRECTA = "guayamuri2026"
+
+        if payload.username == USUARIO_CORRECTO and payload.password == CONTRASENA_CORRECTA:
+            logger.info(f"¡Inicio de sesión exitoso para: {payload.username}!")
+            return {
+                "access_token": "token_secreto_guayamuri_asistencia_2026",
+                "username": payload.username,
+                "name": "Administrador de Sistemas",
+                "role": "admin"
+            }
+        else:
+            logger.warning(f"Credenciales inválidas para el usuario: {payload.username}")
+            raise HTTPException(
+                status_code=401, 
+                detail="Usuario o contraseña incorrectos. Por favor, verifica."
+            )

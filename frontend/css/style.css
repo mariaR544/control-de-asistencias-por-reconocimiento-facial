@@ -694,6 +694,39 @@ tr:hover td {
     /* Valor en AZUL */
 }
 
+.logout-btn {
+        background: rgba(239, 68, 68, 0.1); /* Fondo rojo muy suave y transparente */
+        color: #ef4444; /* Texto e icono rojo */
+        border: 1px solid rgba(239, 68, 68, 0.2);
+        padding: 0.5rem 0.9rem;
+        font-family: inherit;
+        font-size: 0.85rem;
+        font-weight: 600;
+        border-radius: 8px;
+        cursor: pointer;
+        transition: all 0.2s ease;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        margin-left: 15px; /* Separación prudente del último enlace */
+    }
+
+    .logout-btn:hover {
+        background: #ef4444; /* Fondo rojo sólido al pasar el mouse */
+        color: #ffffff; /* Texto blanco al pasar el mouse */
+        box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2);
+        transform: translateY(-1px);
+    }
+
+    .logout-btn:active {
+        transform: translateY(0);
+    }
+    
+    /* Pequeño ajuste para centrar verticalmente el botón con los links */
+    header nav ul {
+        align-items: center;
+    }
+
 .stat-card .stat-label {
     font-size: 0.8rem;
     color: var(--text-muted);
@@ -793,3 +826,133 @@ tr:hover td {
     color: #6c757d;
     cursor: not-allowed;
 }
+
+/* 1. Contenedor de la marca: Alineación geométrica flexible */
+        header .nav-container .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px; /* Distancia perfecta entre el logo y el texto */
+            background: transparent;
+            padding: 2px 0;
+            user-select: none;
+        }
+
+        /* 2. El Escudo/Logo: Compacto, nítido y con relieve */
+        .header-brand-logo {
+            height: 42px; /* Altura ideal: llamativa pero discreta, no altera el alto del header */
+            width: auto;
+            object-fit: contain;
+            /* Filtro de sombra avanzada para que resalte sobre el fondo del header */
+            filter: drop-shadow(0px 2px 5px rgba(0, 0, 0, 0.25)); 
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        /* 3. Texto de Identidad: Tipografía ejecutiva moderna */
+        .brand-text {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .brand-text span {
+            color: #38bdf8; /* Azul celeste tecnológico/premium para resaltar 'Guayamuri' */
+            font-weight: 700;
+        }
+
+        /* 4. Efecto Interactiva al pasar el cursor (Micro-animación) */
+        header .nav-container .logo:hover .header-brand-logo {
+            transform: scale(1.08) rotate(-2deg); /* Micro-escala y leve inclinación sofisticada */
+        }
+
+        /* 5. Asegurar consistencia en el alineamiento del menú */
+        header .nav-container {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            width: 100%;
+        }
+
+        header nav ul {
+            display: flex;
+            align-items: center;
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            gap: 15px;
+        }
+
+        header .nav-container .logo {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            background: transparent;
+            padding: 2px 0;
+            user-select: none;
+        }
+
+        .header-brand-logo {
+            height: 42px;
+            width: auto;
+            object-fit: contain;
+            filter: drop-shadow(0px 2px 5px rgba(0, 0, 0, 0.25)); 
+            transition: transform 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .brand-text {
+            font-size: 1.15rem;
+            font-weight: 600;
+            color: #ffffff;
+            letter-spacing: 0.5px;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+
+        .brand-text span {
+            color: #38bdf8;
+            font-weight: 700;
+        }
+
+        header .nav-container .logo:hover .header-brand-logo {
+            transform: scale(1.08) rotate(-2deg);
+        }
+
+        /* =========================================================
+             ESTILOS DE LA GESTIÓN DE EMPLEADOS
+        ========================================================== --> */
+        .emp-photo {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            object-fit: cover;
+            border: 2px solid var(--border);
+            background: rgba(0, 0, 0, 0.2);
+        }
+
+        .emp-photo-placeholder {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(76, 175, 80, 0.1);
+            border: 2px dashed var(--primary);
+            color: var(--primary);
+            font-size: 1.2rem;
+        }
+
+        .photo-preview {
+            width: 90px;
+            height: 90px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 1px solid var(--border);
+            margin-top: 0.5rem;
+        }
+
+        .row-actions {
+            display: flex;
+            gap: 0.4rem;
+            flex-wrap: wrap;
+        }

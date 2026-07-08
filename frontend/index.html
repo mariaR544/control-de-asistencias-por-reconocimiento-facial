@@ -21,6 +21,11 @@
                     <li><a href="turnos.html">Turnos</a></li>
                     <li><a href="reports.html">Reportes y Excel</a></li>
                     <li><a href="simulador.html">Simulador de Cámara</a></li>
+                    <li>
+                        <button class="logout-btn" onclick="cerrarSesion()">
+                            <span>❌ Cerrar Sesión</span>
+                        </button>
+                    </li>
                 </ul>
             </nav>
         </div>
@@ -173,6 +178,18 @@
             if (nEntradas === 0) entradaTbody.innerHTML = emptyRow("Sin entradas hoy.");
             if (nSalidas === 0) salidaTbody.innerHTML = emptyRow("Sin salidas hoy.");
         }
+
+        // Función para Cerrar Sesión de forma segura
+    function cerrarSesion() {
+        // Eliminamos los datos guardados en el login.html
+        localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("name");
+        localStorage.removeItem("role");
+        
+        // Redirección inmediata al login
+        window.location.href = "login.html";
+    }
 
         // Cargar registros existentes al inicio
         async function fetchRecentAttendance() {

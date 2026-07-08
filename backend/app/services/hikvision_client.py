@@ -55,11 +55,17 @@ def build_user_payload(employee) -> dict:
 
 
 def build_face_record_payload(employee) -> dict:
-    """Metadatos del rostro a subir (la imagen va como parte binaria aparte)."""
+    """Metadatos del rostro a subir (la imagen va como parte binaria aparte).
+
+    Según la documentación oficial ISAPI (JSON_AddFaceRecordCond), el campo
+    "name" es obligatorio junto con faceLibType/FDID/FPID; si se omite, el
+    equipo puede rechazar la solicitud.
+    """
     return {
         "faceLibType": "blackFD",
         "FDID": "1",
         "FPID": str(employee.id),
+        "name": employee.name,
     }
 
 
@@ -99,7 +105,17 @@ def enroll_employee(employee, photo_bytes: bytes) -> str:
         raise CameraEnrollmentError(f"No se pudo contactar la cámara: {e}") from e
 
     # Si la persona ya existe, intentar modificarla en vez de crearla.
-    if r.status_code >= 400 or '"statusCode":4' in r.text:
+    # Se parsea el JSON de respuesta en vez de buscar un substring, ya que
+    # '"statusCode":4' es frágil (puede aparecer en otros campos numéricos).
+    try:
+        r_data = r.json()
+    except ValueError:
+        r_data = {}
+    already_exists = (
+        r_data.get("subStatusCode") == "employeeNoAlreadyExist"
+        or r_data.get("statusCode") not in (1, None)
+    )
+    if r.status_code >= 400 or already_exists:
         modify_url = f"{base}/ISAPI/AccessControl/UserInfo/Modify?format=json"
         try:
             r = requests.put(
@@ -114,10 +130,13 @@ def enroll_employee(employee, photo_bytes: bytes) -> str:
             )
 
     # 2) Carga del rostro (multipart: metadatos JSON + imagen)
+    # IMPORTANTE: según la documentación oficial ISAPI, la parte binaria de
+    # la imagen debe llamarse exactamente "FaceImage" (no "img"), o el equipo
+    # no logra asociar la foto con el registro de la persona.
     face_url = f"{base}/ISAPI/Intelligent/FDLib/FaceDataRecord?format=json"
     files = {
         "FaceDataRecord": (None, json.dumps(build_face_record_payload(employee)), "application/json"),
-        "img": ("face.jpg", photo_bytes, "image/jpeg"),
+        "FaceImage": ("face.jpg", photo_bytes, "image/jpeg"),
     }
     try:
         rf = requests.post(face_url, auth=auth, files=files, timeout=15, verify=verify)
@@ -126,6 +145,17 @@ def enroll_employee(employee, photo_bytes: bytes) -> str:
     if rf.status_code >= 400:
         raise CameraEnrollmentError(
             f"Error al subir el rostro (HTTP {rf.status_code}): {rf.text[:300]}"
+        )
+    # El equipo puede responder HTTP 200 pero con un statusCode de error
+    # dentro del cuerpo JSON (p. ej. formato de imagen no aceptado, rostro
+    # no detectado, etc.), así que también hay que validar el contenido.
+    try:
+        rf_data = rf.json()
+    except ValueError:
+        rf_data = {}
+    if rf_data.get("statusCode") not in (1, None):
+        raise CameraEnrollmentError(
+            f"El equipo rechazó el rostro: {rf_data.get('statusString') or rf.text[:300]}"
         )
 
     logger.info("Empleado %s enrolado en la cámara correctamente.", employee.id)

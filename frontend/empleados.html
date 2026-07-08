@@ -1,4 +1,4 @@
-<!DOCTYPE html>
+﻿<!DOCTYPE html>
 <html lang="es">
 
 <head>
@@ -315,8 +315,16 @@
             return true;
         }
 
-        document.getElementById("emp-form").addEventListener("submit", async (e) => {
+document.getElementById("emp-form").addEventListener("submit", async (e) => {
             e.preventDefault();
+            
+            const submitBtn = document.getElementById("submit-btn");
+            const originalText = submitBtn.innerText;
+            
+            // Bloquear interfaz para evitar peticiones paralelas concurrentes
+            submitBtn.disabled = true;
+            submitBtn.innerText = "⏳ Procesando Todo...";
+
             const shiftVal = document.getElementById("emp-shift").value;
             const body = {
                 name: document.getElementById("emp-name").value.trim(),
@@ -330,22 +338,35 @@
                     const res = await fetch(`${BACKEND_URL}/api/employees/${editingId}`, {
                         method: "PUT", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
                     });
-                    if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al actualizar.", false); return; }
+                    if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al actualizar.", false); submitBtn.disabled = false; submitBtn.innerText = originalText; return; }
                     empId = editingId;
                 } else {
                     body.id = document.getElementById("emp-id").value.trim();
                     const res = await fetch(`${BACKEND_URL}/api/employees`, {
                         method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify(body)
                     });
-                    if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al crear empleado.", false); return; }
+                    if (!res.ok) { const err = await res.json(); showToast(err.detail || "Error al crear empleado.", false); submitBtn.disabled = false; submitBtn.innerText = originalText; return; }
                     empId = body.id;
                 }
+
+                // 1. Guardar foto localmente en la base de datos
                 const photoOk = await uploadPhoto(empId);
-                showToast(editingId ? "Empleado actualizado." : "Empleado agregado.");
+                
+                // 2. Sincronizar automáticamente hacia el hardware Hikvision si hay una foto disponible
+                if (photoOk) {
+                    await syncCamera(empId);
+                } else {
+                    showToast("Se guardaron los datos básicos, pero falló la carga del archivo.", false);
+                }
+
                 resetForm();
                 loadEmployees();
             } catch (e) {
-                showToast("Error de red.", false);
+                showToast("Error de red crítico.", false);
+            } finally {
+                // Devolver el botón a su estado normal de escucha
+                submitBtn.disabled = false;
+                submitBtn.innerText = originalText;
             }
         });
 
@@ -360,14 +381,14 @@
         }
 
         async function syncCamera(id) {
-            showToast("Enviando datos a la cámara...");
+            showToast("Sincronizando rostro con Biométrico Hikvision...");
             try {
                 const res = await fetch(`${BACKEND_URL}/api/employees/${id}/camera-sync`, { method: "POST" });
                 const data = await res.json();
-                if (!res.ok) { showToast(data.detail || "Error al sincronizar.", false); return; }
+                if (!res.ok) { showToast(data.detail || "La cámara rechazó los datos.", false); return; }
                 showToast(data.message, data.ok);
                 loadEmployees();
-            } catch (e) { showToast("Error de red.", false); }
+            } catch (e) { showToast("Error de red al conectar con el dispositivo.", false); }
         }
 
         document.getElementById("filter-name").addEventListener("input", filterEmployees);
@@ -376,7 +397,6 @@
         document.getElementById("filter-dept").addEventListener("input", filterEmployees);
         document.getElementById("filter-shift").addEventListener("change", filterEmployees);
 
-        // Inicializar
         (async () => { await loadShifts(); await loadEmployees(); })();
     </script>
 </body>
