@@ -956,3 +956,70 @@ tr:hover td {
             gap: 0.4rem;
             flex-wrap: wrap;
         }
+
+            /* === Branding del logo en el header (no afecta el resto del layout) === */
+    .nav-container .logo {
+        display: flex;
+        align-items: center;
+        gap: 0.75rem;
+        background: transparent;
+        padding: 0;
+        margin-right: 1.75rem;
+    }
+ 
+    .brand-logo-link {
+        display: flex;
+        align-items: center;
+        gap: 0.7rem;
+        text-decoration: none;
+        background: transparent;
+    }
+ 
+    .brand-logo-img {
+        height: 72px;
+        width: auto;
+        display: block;
+        background: transparent;
+        filter: drop-shadow(0 2px 6px rgba(0, 0, 0, 0.25));
+        transition: transform 0.35s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.35s ease;
+    }
+ 
+    .brand-logo-link:hover .brand-logo-img {
+        transform: scale(1.08) rotate(-2deg);
+        filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.35));
+    }
+ 
+    .brand-text {
+        display: flex;
+        flex-direction: column;
+        line-height: 1.05;
+        font-family: inherit;
+    }
+ 
+    .brand-text .brand-title {
+        font-weight: 800;
+        font-size: 1.05rem;
+        letter-spacing: 0.02em;
+        background: linear-gradient(90deg, #2fa84f, #f5a623 60%, #e8632c);
+        -webkit-background-clip: text;
+        background-clip: text;
+        color: transparent;
+    }
+ 
+    .brand-text .brand-subtitle {
+        font-size: 0.68rem;
+        font-weight: 600;
+        letter-spacing: 0.14em;
+        text-transform: uppercase;
+        color: #9fb3c8;
+    }
+ 
+    @media (max-width: 640px) {
+        .brand-logo-img {
+            height: 40px;
+        }
+ 
+        .brand-text .brand-subtitle {
+            display: none;
+        }
+    }

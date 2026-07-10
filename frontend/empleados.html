@@ -43,24 +43,36 @@
             gap: 0.4rem;
             flex-wrap: wrap;
         }
+
     </style>
 </head>
 
 <body>
     <header>
         <div class="nav-container">
-            <div class="logo">Colegio <span>Guayamuri</span></div>
+            <div class="logo">
+                <a href="index.html" class="brand-logo-link" aria-label="Colegio Guayamuri - Inicio">
+                    <img src="../imagenes/logo_guayamuri.png" alt="Logo Colegio Guayamuri" class="brand-logo-img">
+
+                </a>
+            </div>
             <nav>
                 <ul>
-                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="index.html">Monitoreo</a></li>
                     <li><a href="empleados.html" class="active">Empleados</a></li>
                     <li><a href="turnos.html">Turnos</a></li>
-                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="reports.html">Reportes</a></li>
                     <li><a href="simulador.html">Simulador de Cámara</a></li>
+                    <li>
+                        <button class="logout-btn" onclick="cerrarSesion()">
+                            <span>❌ Cerrar Sesión</span>
+                        </button>
+                    </li>
                 </ul>
             </nav>
         </div>
     </header>
+
     <main>
         <h1 class="page-title">Gestión de Empleados</h1>
         <p class="page-subtitle">Agrega, edita y elimina empleados. Sube la foto del rostro y sincronízala con la cámara
@@ -163,6 +175,17 @@
         let shifts = [];
         let employees = [];
         let editingId = null;
+
+        function cerrarSesion() {
+        // Eliminamos los datos guardados en el login.html
+        localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("name");
+        localStorage.removeItem("role");
+        
+        // Redirección inmediata al login
+        window.location.href = "login.html";
+        }
 
         function showToast(msg, ok = true) {
             const container = document.getElementById("toast-container");

@@ -9,14 +9,24 @@
 <body>
     <header>
         <div class="nav-container">
-            <div class="logo">Colegio <span>Guayamuri</span></div>
+            <div class="logo">
+                <a href="index.html" class="brand-logo-link" aria-label="Colegio Guayamuri - Inicio">
+                    <img src="../imagenes/logo_guayamuri.png" alt="Logo Colegio Guayamuri" class="brand-logo-img">
+                </a>
+            </div>
+
             <nav>
                 <ul>
-                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="index.html">Monitoreo</a></li>
                     <li><a href="empleados.html">Empleados</a></li>
                     <li><a href="turnos.html" class="active">Turnos</a></li>
-                    <li><a href="reports.html">Reportes y Excel</a></li>
+                    <li><a href="reports.html">Reportes</a></li>
                     <li><a href="simulador.html">Simulador de Cámara</a></li>
+                    <li>
+                        <button class="logout-btn" onclick="cerrarSesion()">
+                            <span>❌ Cerrar Sesión</span>
+                        </button>
+                    </li>
                 </ul>
             </nav>
         </div>
@@ -74,6 +84,17 @@
         const BACKEND_URL = "http://localhost:8000";
         let shifts = [];
         let editingShiftId = null;
+
+        function cerrarSesion() {
+        // Eliminamos los datos guardados en el login.html
+        localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("name");
+        localStorage.removeItem("role");
+        
+        // Redirección inmediata al login
+        window.location.href = "login.html";
+        }
 
         function showToast(msg, ok = true) {
             const container = document.getElementById("toast-container");

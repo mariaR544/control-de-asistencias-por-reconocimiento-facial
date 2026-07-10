@@ -12,15 +12,23 @@
     <header>
         <div class="nav-container">
             <div class="logo">
-                Colegio <span>Guayamuri</span>
+                <a href="index.html" class="brand-logo-link" aria-label="Colegio Guayamuri - Inicio">
+                    <img src="../imagenes/logo_guayamuri.png" alt="Logo Colegio Guayamuri" class="brand-logo-img">
+                </a>
             </div>
+
             <nav>
                 <ul>
-                    <li><a href="index.html">Monitoreo En Vivo</a></li>
+                    <li><a href="index.html">Monitoreo</a></li>
                     <li><a href="empleados.html">Empleados</a></li>
                     <li><a href="turnos.html">Turnos</a></li>
-                    <li><a href="reports.html" class="active">Reportes y Excel</a></li>
+                    <li><a href="reports.html" class="active">Reportes</a></li>
                     <li><a href="simulador.html">Simulador de Cámara</a></li>
+                    <li>
+                        <button class="logout-btn" onclick="cerrarSesion()">
+                            <span>❌ Cerrar Sesión</span>
+                        </button>
+                    </li>
                 </ul>
             </nav>
         </div>
@@ -130,6 +138,17 @@
 
         let summaryData = [];
         let logsData = [];
+
+        function cerrarSesion() {
+        // Eliminamos los datos guardados en el login.html
+        localStorage.removeItem("token");
+        localStorage.removeItem("username");
+        localStorage.removeItem("name");
+        localStorage.removeItem("role");
+        
+        // Redirección inmediata al login
+        window.location.href = "login.html";
+        }
 
         // --- MODIFICADO: Ahora calcula automáticamente la quincena actual ---
         function setDefaultDates() {
