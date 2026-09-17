@@ -50,23 +50,27 @@
             background: linear-gradient(90deg, var(--primary) 0%, var(--accent) 100%);
         }
         .login-logo {
-            text-align: center;
-            font-family: 'Outfit', sans-serif;
-            font-size: 2.2rem;
-            font-weight: 800;
-            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
-            -webkit-background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 0.5rem;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            margin-bottom: 1.25rem;
         }
-        .login-logo span {
-            color: var(--text-main);
-            -webkit-text-fill-color: initial;
+        .login-logo img {
+            max-width: 170px;
+            max-height: 95px;
+            width: auto;
+            height: auto;
+            object-fit: contain;
+            filter: drop-shadow(0 4px 10px rgba(0, 0, 0, 0.12));
+            transition: transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
+        }
+        .login-logo img:hover {
+            transform: scale(1.04);
         }
         .login-title {
             text-align: center;
             color: var(--text-main);
-            font-size: 1.4rem;
+            font-size: 1.35rem;
             margin-bottom: 2rem;
             font-weight: 700;
         }
@@ -122,9 +126,9 @@
     <div class="login-wrapper">
         <div class="login-card">
             <div class="login-logo">
-                Colegio <span>Guayamuri</span>
+                <img src="../imagenes/logo_guayamuri.png" alt="Logo Colegio Guayamuri">
             </div>
-            <div class="login-title">Control de Asistencia</div>
+            <div class="login-title">Control de Asistencias</div>
             
             <div id="error-box" class="error-message"></div>
             
@@ -143,7 +147,7 @@
             </form>
             
             <div class="footer-text">
-                &copy; 2026 Colegio Guayamuri. Todos los derechos reservados.
+                &copy; 2026 Todos los derechos reservados.
             </div>
         </div>
     </div>
